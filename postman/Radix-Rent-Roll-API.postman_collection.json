@@ -1,0 +1,186 @@
+{
+  "info": {
+    "name": "Radix Rent Roll API",
+    "description": "Upload rent roll files for AI-powered standardization and track processing status.\n\nSet the `api_key` variable in your Postman environment before sending requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{api_key}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://connect.rediq.io",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "riq_live_your_api_key_here",
+      "type": "string"
+    },
+    {
+      "key": "batch_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Upload Rent Roll Files",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 202) {",
+              "    var jsonData = pm.response.json();",
+              "    if (jsonData.data && jsonData.data.batchId) {",
+              "        pm.collectionVariables.set('batch_id', jsonData.data.batchId);",
+              "        console.log('Saved batch_id: ' + jsonData.data.batchId);",
+              "    }",
+              "}",
+              "",
+              "pm.test('Status code is 202', function () {",
+              "    pm.response.to.have.status(202);",
+              "});",
+              "",
+              "pm.test('Response contains batchId', function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data).to.have.property('batchId');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "files",
+              "type": "file",
+              "src": [],
+              "description": "Select one or more Excel rent roll files (.xlsx, .xls, .csv). Max 2 MB per file, up to 20 files."
+            },
+            {
+              "key": "notificationMethod",
+              "value": "[{\"type\":\"email\",\"entry\":\"your-email@example.com\"}]",
+              "type": "text",
+              "description": "JSON array of notification methods. Supports email and webhook (HTTPS only)."
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/external/v1/upload",
+          "host": ["{{base_url}}"],
+          "path": ["api", "external", "v1", "upload"]
+        },
+        "description": "Upload one or more rent roll files for AI-powered standardization.\n\nThe response includes a `batchId` that is automatically saved to the collection variables for use in the status request.\n\n**Supported file types:** .xlsx, .xls, .xlsm, .csv, .ods\n**Max file size:** 2 MB per file\n**Max files:** 20 per request"
+      },
+      "response": [
+        {
+          "name": "202 - Files Accepted",
+          "originalRequest": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/external/v1/upload",
+              "host": ["{{base_url}}"],
+              "path": ["api", "external", "v1", "upload"]
+            }
+          },
+          "status": "Accepted",
+          "code": 202,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"statuscode\": 202,\n  \"requestId\": \"f07361dc1cc4b7cf5738efbca470e824\",\n  \"data\": {\n    \"batchId\": \"6af30011-af82-4425-a1ad-406db4b0995c\",\n    \"status\": \"queued\",\n    \"filesUploaded\": 1,\n    \"filesQueued\": 1,\n    \"estimatedTotalUnits\": 35,\n    \"message\": \"Files uploaded successfully. Processing started.\",\n    \"estimatedCompletionMinutes\": 5,\n    \"trackingUrl\": \"https://connect.rediq.io/api/external/v1/job/6af30011-af82-4425-a1ad-406db4b0995c/status\",\n    \"createdAt\": \"2026-02-09T19:32:43.643Z\"\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Job Status",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response contains status', function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.data).to.have.property('status');",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "if (jsonData.data) {",
+              "    console.log('Batch status: ' + jsonData.data.status);",
+              "    console.log('Progress: ' + jsonData.data.percentComplete + '%');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/external/v1/job/{{batch_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["api", "external", "v1", "job", "{{batch_id}}", "status"]
+        },
+        "description": "Retrieve the current processing status of a batch upload job.\n\nThe `batch_id` is automatically populated after a successful upload request.\n\nOnly the API key that created the batch can query its status.\n\n**Recommended polling interval:** Every 30 seconds."
+      },
+      "response": [
+        {
+          "name": "200 - Job Queued",
+          "originalRequest": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/external/v1/job/{{batch_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "external", "v1", "job", "{{batch_id}}", "status"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"statuscode\": 200,\n  \"requestId\": \"a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6\",\n  \"data\": {\n    \"batchId\": \"6af30011-af82-4425-a1ad-406db4b0995c\",\n    \"status\": \"queued\",\n    \"fileCount\": 1,\n    \"filesCompleted\": 0,\n    \"filesInProgress\": 0,\n    \"filesFailed\": 0,\n    \"percentComplete\": 0,\n    \"estimatedTotalUnits\": 35,\n    \"actualTotalUnits\": null,\n    \"errorMessage\": null,\n    \"createdAt\": \"2026-02-09T19:32:43.643Z\",\n    \"updatedAt\": \"2026-02-09T19:32:43.643Z\",\n    \"files\": [\n      {\n        \"fileId\": \"05e9078d-2023-4e60-8a9f-ad9da5208301\",\n        \"fileName\": \"aurora-128.xlsx\",\n        \"status\": \"uploaded\",\n        \"downloadUrl\": null,\n        \"errorMessage\": null,\n        \"createdAt\": \"2026-02-09T19:32:43.643Z\",\n        \"updatedAt\": \"2026-02-09T19:32:43.643Z\"\n      }\n    ]\n  }\n}"
+        },
+        {
+          "name": "200 - Job Complete",
+          "originalRequest": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/external/v1/job/{{batch_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "external", "v1", "job", "{{batch_id}}", "status"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"statuscode\": 200,\n  \"requestId\": \"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8\",\n  \"data\": {\n    \"batchId\": \"6af30011-af82-4425-a1ad-406db4b0995c\",\n    \"status\": \"complete\",\n    \"fileCount\": 1,\n    \"filesCompleted\": 1,\n    \"filesInProgress\": 0,\n    \"filesFailed\": 0,\n    \"percentComplete\": 100,\n    \"estimatedTotalUnits\": 35,\n    \"actualTotalUnits\": 32,\n    \"errorMessage\": null,\n    \"createdAt\": \"2026-02-09T19:32:43.643Z\",\n    \"updatedAt\": \"2026-02-09T19:37:00.000Z\",\n    \"files\": [\n      {\n        \"fileId\": \"05e9078d-2023-4e60-8a9f-ad9da5208301\",\n        \"fileName\": \"aurora-128.xlsx\",\n        \"status\": \"complete\",\n        \"downloadUrl\": \"https://external-api-rent-rolls.s3.amazonaws.com/...\",\n        \"errorMessage\": null,\n        \"createdAt\": \"2026-02-09T19:32:43.643Z\",\n        \"updatedAt\": \"2026-02-09T19:34:55.000Z\"\n      }\n    ],\n    \"batchDownloads\": [\n      {\n        \"type\": \"json\",\n        \"downloadUrl\": \"https://external-api-rent-rolls.s3.amazonaws.com/...\",\n        \"expiresAt\": \"2026-02-10T19:37:00.000Z\"\n      },\n      {\n        \"type\": \"excel\",\n        \"downloadUrl\": \"https://external-api-rent-rolls.s3.amazonaws.com/...\",\n        \"expiresAt\": \"2026-02-10T19:37:00.000Z\"\n      }\n    ]\n  }\n}"
+        }
+      ]
+    }
+  ]
+}
+
+

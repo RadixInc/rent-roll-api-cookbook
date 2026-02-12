@@ -1,0 +1,10 @@
+{
+  "Content-Type": "application/json",
+  "User-Agent": "RedIQ-External-API/1.0",
+  "X-Batch-ID": "6af30011-af82-4425-a1ad-406db4b0995c",
+  "X-Batch-Status": "completed",
+  "X-Event-Type": "batch.completed",
+  "X-Timestamp": "2026-02-10T19:37:00.000Z"
+}
+
+

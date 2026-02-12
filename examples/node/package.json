@@ -1,0 +1,15 @@
+{
+  "name": "radix-rent-roll-node-example",
+  "version": "1.0.0",
+  "description": "Upload rent roll files to the Radix Underwriting API using Node.js",
+  "type": "module",
+  "scripts": {
+    "upload": "node upload.mjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
+
+

@@ -1,0 +1,22 @@
+{
+  "batch_id": "6af30011-af82-4425-a1ad-406db4b0995c",
+  "status": "completed",
+  "summary": {
+    "files_uploaded": 3,
+    "files_succeeded": 3,
+    "files_failed": 0,
+    "fully_processed": 3,
+    "validation_required": 0,
+    "unprocessable": 0,
+    "total_units_processed": 128,
+    "credits_used": 128
+  },
+  "outputs": {
+    "download_url": "https://external-api-rent-rolls.s3.amazonaws.com/results/6af30011-af82-4425-a1ad-406db4b0995c/batch-output.zip?X-Amz-Algorithm=AWS4-HMAC-SHA256&..."
+  },
+  "presigned_url_expiry": "2026-02-11T19:37:00.000Z",
+  "created_at": "2026-02-10T19:32:43.643Z",
+  "completed_at": "2026-02-10T19:37:00.000Z"
+}
+
+
