@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "radix-rent-roll": {
+      "command": "python",
+      "args": ["C:\\Users\\YourName\\path\\to\\radix-rent-roll-mcp\\server.py"],
+      "env": {
+        "RADIX_API_KEY": "your-api-key-here",
+        "RADIX_API_URL": "https://connect.rediq.io"
+      }
+    }
+  }
+}
