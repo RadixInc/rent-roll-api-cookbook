@@ -1,40 +1,68 @@
-# Windows "Send To" Script
+# redIQ Rent Roll Uploader - Windows Right-Click
 
-Upload rent roll files to the Radix API by right-clicking them in Windows Explorer.
+Upload rent rolls to redIQ directly from File Explorer.
+Right-click any spreadsheet, select **Upload Rent Roll (redIQ)**, done.
 
-## Setup
+**Supported formats:** `.xlsx`, `.xls`, `.xlsm`, `.csv`, `.ods`
 
-1. Open `send-to-radix.bat` in a text editor (e.g. Notepad).
-2. Replace the placeholder values at the top:
-   ```bat
-   set "API_KEY=riq_live_your_actual_key"
-   set "NOTIFY_EMAIL=you@company.com"
-   ```
-3. Press **Win + R**, type `shell:sendto`, and press Enter.
-4. Copy `send-to-radix.bat` (or a shortcut to it) into the **SendTo** folder that opens.
+---
 
-## Usage
+## Quick Start
 
-1. Select one or more `.xlsx`, `.xls`, or `.csv` files in File Explorer.
-2. Right-click the selection.
-3. Choose **Send to** > **send-to-radix**.
-4. A command prompt window will show the upload progress and API response.
-5. You will receive an email notification when processing is complete.
+1. **Download** - clone this repo (or download the ZIP) to a permanent location (e.g. local, NOT a cloud storage location like OneDrive or Google Drive)
+2. **Run Setup** - double-click `Run Setup.cmd` and follow the prompts
+3. **Upload** - right-click any supported file and select **Upload Rent Roll (redIQ)**
 
-You can also drag files directly onto the `.bat` file.
+> On Windows 11 you may need to click **Show more options** first.
 
-## Requirements
+Multi-file select is supported - select several files, right-click, and they all upload in one batch (up to 20).
 
-- Windows 10 or later (curl is included by default)
-- No additional software required
+---
 
-## Troubleshooting
+## What Setup Does
 
-| Problem                         | Solution                                                  |
-| ------------------------------- | --------------------------------------------------------- |
-| "Please edit this script..."    | Open the `.bat` file and set your `API_KEY`               |
-| "curl is not recognized"        | Upgrade to Windows 10 1803+ or install curl manually      |
-| HTTP 401                        | Check that your API key is correct and not revoked         |
-| HTTP 403                        | Your account may not have API access or credits remaining  |
+Setup walks you through three steps:
 
+1. **API Key** - stored securely in Windows Credential Manager (DPAPI-encrypted)
+2. **Notifications** - email and/or webhook URL for upload status updates
+3. **Context Menu** - registers the right-click menu entry in File Explorer
 
+Configuration is saved to `%APPDATA%\RedIQ\RentRollUploader\config.json`.
+
+---
+
+## Reconfigure
+
+Run `Run Setup.cmd` again at any time and choose **Setup / Configure**. If existing settings are detected you'll get a menu to update individual items without re-entering everything:
+
+- **API Key** - rotate or replace your key
+- **Notification Email** - change or clear
+- **Webhook URL** - change or clear
+- **Reinstall Context Menu** - re-register the right-click entry (useful after moving the folder)
+- **Update All** - wipe and redo all settings from scratch
+
+---
+
+## Uninstall
+
+Double-click `Run Setup.cmd` again and choose **Uninstall**. This removes:
+
+- The right-click context menu entry
+- Your stored API key from Windows Credential Manager
+- All configuration and log files
+
+---
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `Run Setup.cmd` | **Start here.** Double-click to launch the setup wizard. |
+| `setup.ps1` | Setup, install, and uninstall logic (called by the .cmd file) |
+| `upload.ps1` | Upload logic (called automatically by the right-click context menu) |
+
+---
+
+## Logs
+
+Upload logs are written to `%APPDATA%\RedIQ\RentRollUploader\uploader.log`.
