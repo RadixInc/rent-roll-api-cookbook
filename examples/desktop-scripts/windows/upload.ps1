@@ -107,6 +107,87 @@ function Show-YesNo(
   return [System.Windows.Forms.MessageBox]::Show($message, $title, $buttons, $mbIcon)
 }
 
+# ---------- Deal selection ----------
+function Show-DealChooser {
+  Add-Type -AssemblyName System.Windows.Forms | Out-Null
+  Add-Type -AssemblyName System.Drawing | Out-Null
+
+  $form = [System.Windows.Forms.Form]::new()
+  $form.Text = "Associate with a Deal - redIQ"
+  $form.Size = [System.Drawing.Size]::new(320, 245)
+  $form.StartPosition = "CenterScreen"
+  $form.FormBorderStyle = "FixedDialog"
+  $form.MaximizeBox = $false
+  $form.MinimizeBox = $false
+
+  $result = "cancel"
+
+  $btnRecent = [System.Windows.Forms.Button]::new()
+  $btnRecent.Text = "Select Recent Deal"
+  $btnRecent.Size = [System.Drawing.Size]::new(264, 34)
+  $btnRecent.Location = [System.Drawing.Point]::new(20, 16)
+  $btnRecent.Add_Click({ $script:result = "recent"; $form.Close() })
+
+  $btnSearch = [System.Windows.Forms.Button]::new()
+  $btnSearch.Text = "Search Deal by Name"
+  $btnSearch.Size = [System.Drawing.Size]::new(264, 34)
+  $btnSearch.Location = [System.Drawing.Point]::new(20, 58)
+  $btnSearch.Add_Click({ $script:result = "search"; $form.Close() })
+
+  $btnCreate = [System.Windows.Forms.Button]::new()
+  $btnCreate.Text = "Create New Deal"
+  $btnCreate.Size = [System.Drawing.Size]::new(264, 34)
+  $btnCreate.Location = [System.Drawing.Point]::new(20, 100)
+  $btnCreate.Add_Click({ $script:result = "create"; $form.Close() })
+
+  $btnSkip = [System.Windows.Forms.Button]::new()
+  $btnSkip.Text = "Upload Without Deal"
+  $btnSkip.Size = [System.Drawing.Size]::new(264, 34)
+  $btnSkip.Location = [System.Drawing.Point]::new(20, 142)
+  $btnSkip.Add_Click({ $script:result = "skip"; $form.Close() })
+
+  $form.Controls.AddRange(@($btnRecent, $btnSearch, $btnCreate, $btnSkip))
+  $form.ShowDialog() | Out-Null
+  return $result
+}
+
+function Show-SearchBox {
+  Add-Type -AssemblyName System.Windows.Forms | Out-Null
+  Add-Type -AssemblyName System.Drawing | Out-Null
+
+  $form = [System.Windows.Forms.Form]::new()
+  $form.Text = "Search Deals - redIQ"
+  $form.Size = [System.Drawing.Size]::new(370, 130)
+  $form.StartPosition = "CenterScreen"
+  $form.FormBorderStyle = "FixedDialog"
+  $form.MaximizeBox = $false
+  $form.MinimizeBox = $false
+
+  $lbl = [System.Windows.Forms.Label]::new()
+  $lbl.Text = "Enter deal name to search:"
+  $lbl.Location = [System.Drawing.Point]::new(16, 16)
+  $lbl.Size = [System.Drawing.Size]::new(320, 20)
+
+  $txt = [System.Windows.Forms.TextBox]::new()
+  $txt.Location = [System.Drawing.Point]::new(16, 40)
+  $txt.Size = [System.Drawing.Size]::new(240, 24)
+
+  $btnSearch = [System.Windows.Forms.Button]::new()
+  $btnSearch.Text = "Search"
+  $btnSearch.Location = [System.Drawing.Point]::new(264, 38)
+  $btnSearch.Size = [System.Drawing.Size]::new(74, 28)
+  $btnSearch.DialogResult = [System.Windows.Forms.DialogResult]::OK
+
+  $form.AcceptButton = $btnSearch
+  $form.Controls.AddRange(@($lbl, $txt, $btnSearch))
+
+  $dlgResult = $form.ShowDialog()
+  if ($dlgResult -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
+  $term = $txt.Text.Trim()
+  if ([string]::IsNullOrWhiteSpace($term)) { return $null }
+  return $term
+}
+
 # ---------- Credential + config ----------
 function Initialize-CredentialManager {
   if (-not (Get-Module -ListAvailable -Name CredentialManager)) {
