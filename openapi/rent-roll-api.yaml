@@ -1,249 +1,83 @@
-openapi: "3.0.0"
+openapi: 3.0.0
 info:
-  title: Radix Underwriting - Rent Roll API
-  version: "1.0.0"
-  description: |
-    Public API for programmatic access to AI-powered rent roll standardization.
-
-    ## Overview
-    Upload raw rent roll files and receive standardized, structured data back.
-    Files are processed asynchronously — upload, then poll for status or receive a webhook/email notification when complete.
-
-    ## Authentication
-    All requests require an API key in the `Authorization` header:
-    ```
-    Authorization: Bearer riq_live_your_api_key_here
-    ```
-    API keys can be obtained through the redIQ platform under External API settings.
-
-    ## Credits
-    Each account has a monthly credit limit. Credits are consumed based on the number of units
-    in the uploaded rent rolls. Check your remaining credits in the redIQ platform.
+  title: RedIQ External API
+  version: 1.0.0
+  description: Public API for programmatic access to RedIQ rent roll processing.
   contact:
-    name: Radix Underwriting Support
+    name: RedIQ Support
     email: support@rediq.io
-
 servers:
   - url: https://connect.rediq.io
     description: Production
-
 tags:
   - name: Upload & Processing
     description: Upload rent roll files and track processing status
-
+  - name: Deals
+    description: Create, read, update, and delete deals for linking rent rolls
+  - name: API Key Management
+    description: Admin endpoints for managing API keys (requires JWT authentication)
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: Authorization
-      description: "Use format: `Bearer <api-key>`"
-
+      description: "API Key: `Bearer <api-key>` or `ApiKey <api-key>` or `<api-key>`"
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for admin endpoints
   schemas:
-    UploadResponse:
+    DealResponse:
       type: object
       properties:
-        statuscode:
+        counterId:
           type: integer
-          example: 202
-        requestId:
+          description: Sequential deal number within the account. Use this as dealId when
+            uploading rent rolls.
+          example: 42
+        dealName:
           type: string
-          description: Unique request identifier
-          example: "f07361dc1cc4b7cf5738efbca470e824"
-        data:
-          $ref: "#/components/schemas/UploadResponseData"
-
-    UploadResponseData:
-      type: object
-      properties:
-        batchId:
-          type: string
-          format: uuid
-          description: Unique batch identifier for tracking
-          example: "6af30011-af82-4425-a1ad-406db4b0995c"
-        status:
-          type: string
-          enum: [queued]
-          description: Initial status is always "queued"
-          example: "queued"
-        filesUploaded:
-          type: integer
-          description: Number of files successfully uploaded
-          example: 3
-        filesQueued:
-          type: integer
-          description: Number of files queued for processing
-          example: 3
-        estimatedTotalUnits:
-          type: integer
-          description: Estimated total units across all files
-          example: 35
-        message:
-          type: string
-          description: Human-readable status message
-          example: "Files uploaded successfully. Processing started."
-        estimatedCompletionMinutes:
-          type: number
-          description: Estimated processing time in minutes
-          example: 5.0
-        trackingUrl:
-          type: string
-          format: uri
-          description: URL to poll for batch status
-          example: "https://connect.rediq.io/api/external/v1/job/6af30011-af82-4425-a1ad-406db4b0995c/status"
-        createdAt:
-          type: string
-          format: date-time
-          description: Batch creation timestamp (UTC)
-          example: "2026-02-09T19:32:43.643Z"
-
-    JobStatusResponse:
-      type: object
-      properties:
-        statuscode:
-          type: integer
-          example: 200
-        requestId:
-          type: string
-          description: Unique request identifier
-          example: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
-        data:
-          $ref: "#/components/schemas/JobStatusResponseData"
-
-    JobStatusResponseData:
-      type: object
-      properties:
-        batchId:
-          type: string
-          format: uuid
-          description: Unique batch identifier
-        status:
-          type: string
-          enum: [queued, in progress, complete, failed, partially complete]
-          description: Current batch processing status
-        fileCount:
-          type: integer
-          description: Total number of files in the batch
-        filesCompleted:
-          type: integer
-          description: Number of files successfully processed
-        filesInProgress:
-          type: integer
-          description: Number of files currently being processed
-        filesFailed:
-          type: integer
-          description: Number of files that failed processing
-        percentComplete:
-          type: number
-          minimum: 0
-          maximum: 100
-          description: Processing progress percentage (0-100)
-        estimatedTotalUnits:
-          type: integer
-          nullable: true
-          description: Estimated total units across all files
-        actualTotalUnits:
-          type: integer
-          nullable: true
-          description: Actual total units processed (available when complete)
-        errorMessage:
+          description: Name of the deal
+          example: Sunset Plaza Apartments
+        address:
           type: string
           nullable: true
-          description: Error details if batch failed or partially completed
-        createdAt:
-          type: string
-          format: date-time
-          description: Batch creation timestamp (UTC)
-        updatedAt:
-          type: string
-          format: date-time
-          description: Last status update timestamp (UTC)
-        files:
-          type: array
-          description: Individual file status details
-          items:
-            $ref: "#/components/schemas/FileStatus"
-        batchDownloads:
-          type: array
-          nullable: true
-          description: Batch download links (available when processing is complete)
-          items:
-            $ref: "#/components/schemas/BatchDownload"
-
-    FileStatus:
-      type: object
-      properties:
-        fileId:
-          type: string
-          format: uuid
-          description: Unique file identifier
-        fileName:
-          type: string
-          description: Original uploaded file name
-          example: "aurora-128.xlsx"
-        status:
-          type: string
-          enum: [uploaded, in progress, complete, failed]
-          description: Individual file processing status
-        downloadUrl:
-          type: string
-          format: uri
-          nullable: true
-          description: Pre-signed download URL for processed output (available when complete)
-        errorMessage:
+          example: 123 Main St
+        city:
           type: string
           nullable: true
-          description: Error message if file processing failed
-        createdAt:
+          example: Austin
+        state:
           type: string
-          format: date-time
-        updatedAt:
+          nullable: true
+          example: TX
+        zip:
           type: string
-          format: date-time
-
-    BatchDownload:
-      type: object
-      properties:
-        type:
-          type: string
-          description: "Download format type (e.g., json, excel)"
-        downloadUrl:
-          type: string
-          format: uri
-          description: Pre-signed download URL
-        expiresAt:
-          type: string
-          format: date-time
-          description: URL expiration timestamp (UTC)
-
-    ErrorResponse:
-      type: object
-      properties:
-        statusCode:
+          nullable: true
+          example: "78701"
+        unitCount:
           type: integer
-        error:
-          type: object
-          properties:
-            message:
-              type: string
-              description: Human-readable error message
-            code:
-              type: string
-              description: Machine-readable error code
-
+          nullable: true
+          example: 128
+        createdOn:
+          type: string
+          format: date-time
+          nullable: true
+          description: Deal creation timestamp (UTC)
+        lastModifiedOn:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last modification timestamp (UTC)
 paths:
   /api/external/v1/upload:
     post:
       summary: Upload rent roll files
-      description: |
-        Upload one or more Excel rent roll files for AI-powered standardization.
-
-        - **Max file size:** 2 MB per file
-        - **Max files per request:** 20
-
-        Files are queued for asynchronous processing. Use the returned `trackingUrl`
-        to poll for status, or specify `notificationMethod` to receive email/webhook
-        notifications when processing completes.
+      description: Upload rent roll files with notification preferences. Accepts up to
+        20 files in Excel, CSV, or ODS format. Files are queued for asynchronous
+        processing.
       operationId: uploadRentRolls
       tags:
         - Upload & Processing
@@ -261,7 +95,8 @@ paths:
               properties:
                 files:
                   type: array
-                  description: Excel rent roll files. Max 2 MB per file, up to 20 files.
+                  description: Rent roll files (.xlsx, .xls, .xlsm, .csv, .ods). Max 2MB/file, up
+                    to 20 files.
                   minItems: 1
                   maxItems: 20
                   items:
@@ -269,96 +104,80 @@ paths:
                     format: binary
                 notificationMethod:
                   type: string
-                  description: |
-                    JSON array of notification methods. At least one is required.
-
-                    **Email notification:**
-                    ```json
-                    [{"type": "email", "entry": "user@example.com"}]
-                    ```
-
-                    **Webhook notification (HTTPS only):**
-                    ```json
-                    [{"type": "webhook", "entry": "https://api.example.com/webhook"}]
-                    ```
-
-                    **Both:**
-                    ```json
-                    [
-                      {"type": "email", "entry": "user@example.com"},
-                      {"type": "webhook", "entry": "https://hooks.zapier.com/abc123"}
-                    ]
-                    ```
+                  description: 'JSON array of notification methods. Example:
+                    [{"type":"email","entry":"user@example.com"},{"type":"webhook","entry":"https://api.example.com/webhook"}]'
                   example: '[{"type":"email","entry":"user@example.com"}]'
+                dealId:
+                  type: integer
+                  description: Optional. The counterId of an existing deal to link the uploaded
+                    rent rolls to. Use the Deals API to create a deal first,
+                    then pass its counterId here.
+                  example: 42
       responses:
         "202":
-          description: Files accepted and queued for processing
+          description: Files accepted for processing
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UploadResponse"
-              example:
-                statuscode: 202
-                requestId: "f07361dc1cc4b7cf5738efbca470e824"
-                data:
-                  batchId: "6af30011-af82-4425-a1ad-406db4b0995c"
-                  status: "queued"
-                  filesUploaded: 1
-                  filesQueued: 1
-                  estimatedTotalUnits: 35
-                  message: "Files uploaded successfully. Processing started."
-                  estimatedCompletionMinutes: 5.0
-                  trackingUrl: "https://connect.rediq.io/api/external/v1/job/6af30011-af82-4425-a1ad-406db4b0995c/status"
-                  createdAt: "2026-02-09T19:32:43.643Z"
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 202
+                  requestId:
+                    type: string
+                    description: Unique request identifier (ULID format)
+                  data:
+                    type: object
+                    properties:
+                      batchId:
+                        type: string
+                        format: uuid
+                        description: Unique batch identifier for tracking
+                      status:
+                        type: string
+                        enum:
+                          - queued
+                        description: Current status of the batch
+                      filesUploaded:
+                        type: integer
+                        description: Number of files successfully uploaded
+                      filesQueued:
+                        type: integer
+                        description: Number of files queued for processing
+                      estimatedTotalUnits:
+                        type: integer
+                        description: Estimated total units across all files
+                      message:
+                        type: string
+                        description: Human-readable status message
+                      estimatedCompletionMinutes:
+                        type: number
+                        description: Estimated processing time in minutes
+                      trackingUrl:
+                        type: string
+                        format: uri
+                        description: URL to track batch status
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Batch creation timestamp
         "400":
-          description: Bad request — invalid files, notification method, or validation errors
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                statuscode: 400
-                requestId: "abc123"
-                error:
-                  message: "At least one file is required"
+          description: Bad request - invalid files, notification method, or validation
+            errors
         "401":
-          description: Authentication failed — missing, invalid, deleted, or revoked API key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                statusCode: 401
-                error:
-                  message: "Invalid API key"
-                  code: "INVALID_KEY"
+          description: Authentication failed - missing, invalid, deleted, or revoked API key
         "403":
-          description: API access not enabled or insufficient credits
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                statusCode: 403
-                error:
-                  message: "Insufficient credits to process this request"
+          description: Forbidden - API access not enabled or insufficient credits
         "429":
           description: Rate limit exceeded
         "500":
           description: Internal server error
-
   /api/external/v1/job/{batchId}/status:
     get:
       summary: Get batch job status
-      description: |
-        Retrieve the current processing status of a batch upload job.
-
-        Returns status of the overall batch, individual file statuses, and download
-        links when processing is complete.
-
-        **Recommended polling interval:** Every 30 seconds.
-
-        Only the API key that created the batch can query its status.
+      description: Retrieve the current status of a batch upload job, including status
+        of individual files and download links when complete.
       operationId: getJobStatus
       tags:
         - Upload & Processing
@@ -368,119 +187,604 @@ paths:
         - name: batchId
           in: path
           required: true
-          description: Batch ID returned from the upload endpoint
+          description: Batch ID returned from upload endpoint
           schema:
             type: string
             format: uuid
-            example: "6af30011-af82-4425-a1ad-406db4b0995c"
       responses:
         "200":
-          description: Job status retrieved successfully
+          description: Job status retrieved
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JobStatusResponse"
-              examples:
-                queued:
-                  summary: Job queued
-                  value:
-                    statuscode: 200
-                    requestId: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
-                    data:
-                      batchId: "6af30011-af82-4425-a1ad-406db4b0995c"
-                      status: "queued"
-                      fileCount: 2
-                      filesCompleted: 0
-                      filesInProgress: 0
-                      filesFailed: 0
-                      percentComplete: 0.0
-                      estimatedTotalUnits: 70
-                      actualTotalUnits: null
-                      errorMessage: null
-                      createdAt: "2026-02-09T19:32:43.643Z"
-                      updatedAt: "2026-02-09T19:32:43.643Z"
-                      files:
-                        - fileId: "05e9078d-2023-4e60-8a9f-ad9da5208301"
-                          fileName: "aurora-128.xlsx"
-                          status: "uploaded"
-                          downloadUrl: null
-                          errorMessage: null
-                          createdAt: "2026-02-09T19:32:43.643Z"
-                          updatedAt: "2026-02-09T19:32:43.643Z"
-                        - fileId: "a1b2c3d4-5678-9abc-def0-123456789abc"
-                          fileName: "sunset-plaza.xlsx"
-                          status: "uploaded"
-                          downloadUrl: null
-                          errorMessage: null
-                          createdAt: "2026-02-09T19:32:43.643Z"
-                          updatedAt: "2026-02-09T19:32:43.643Z"
-                complete:
-                  summary: Job complete with batch downloads
-                  value:
-                    statuscode: 200
-                    requestId: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8"
-                    data:
-                      batchId: "6af30011-af82-4425-a1ad-406db4b0995c"
-                      status: "complete"
-                      fileCount: 2
-                      filesCompleted: 2
-                      filesInProgress: 0
-                      filesFailed: 0
-                      percentComplete: 100.0
-                      estimatedTotalUnits: 70
-                      actualTotalUnits: 68
-                      errorMessage: null
-                      createdAt: "2026-02-09T19:32:43.643Z"
-                      updatedAt: "2026-02-09T19:37:00.000Z"
-                      files:
-                        - fileId: "05e9078d-2023-4e60-8a9f-ad9da5208301"
-                          fileName: "aurora-128.xlsx"
-                          status: "complete"
-                          downloadUrl: "https://external-api-rent-rolls.s3.amazonaws.com/..."
-                          errorMessage: null
-                          createdAt: "2026-02-09T19:32:43.643Z"
-                          updatedAt: "2026-02-09T19:34:55.000Z"
-                        - fileId: "a1b2c3d4-5678-9abc-def0-123456789abc"
-                          fileName: "sunset-plaza.xlsx"
-                          status: "complete"
-                          downloadUrl: "https://external-api-rent-rolls.s3.amazonaws.com/..."
-                          errorMessage: null
-                          createdAt: "2026-02-09T19:32:43.643Z"
-                          updatedAt: "2026-02-09T19:37:00.000Z"
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 200
+                  requestId:
+                    type: string
+                    description: Unique request identifier (ULID format)
+                  data:
+                    type: object
+                    properties:
+                      batchId:
+                        type: string
+                        format: uuid
+                        description: Unique batch identifier
+                      status:
+                        type: string
+                        enum:
+                          - queued
+                          - in progress
+                          - complete
+                          - failed
+                          - partially complete
+                        description: Current batch status
+                      fileCount:
+                        type: integer
+                        description: Total files in batch
+                      filesCompleted:
+                        type: integer
+                        description: Files successfully processed
+                      filesInProgress:
+                        type: integer
+                        description: Files currently processing
+                      filesFailed:
+                        type: integer
+                        description: Files that failed to process
+                      percentComplete:
+                        type: number
+                        minimum: 0
+                        maximum: 100
+                        description: Processing progress percentage
+                      estimatedTotalUnits:
+                        type: integer
+                        nullable: true
+                        description: Estimated total units across all files
+                      actualTotalUnits:
+                        type: integer
+                        nullable: true
+                        description: Actual total units processed (available when complete)
+                      errorMessage:
+                        type: string
+                        nullable: true
+                        description: Error message if batch failed or partially completed
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Batch creation timestamp
+                      updatedAt:
+                        type: string
+                        format: date-time
+                        description: Last update timestamp
                       batchDownloads:
-                        - type: "json"
-                          downloadUrl: "https://external-api-rent-rolls.s3.amazonaws.com/..."
-                          expiresAt: "2026-02-10T19:37:00.000Z"
-                        - type: "excel"
-                          downloadUrl: "https://external-api-rent-rolls.s3.amazonaws.com/..."
-                          expiresAt: "2026-02-10T19:37:00.000Z"
+                        type: array
+                        description: Batch download links (available when complete)
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                              description: Download type (e.g., zip, excel, json)
+                            downloadUrl:
+                              type: string
+                              format: uri
+                              description: Pre-signed download URL
+                            expiresAt:
+                              type: string
+                              format: date-time
+                              description: URL expiration timestamp
+                      files:
+                        type: array
+                        description: Individual file status details
+                        items:
+                          type: object
+                          properties:
+                            fileId:
+                              type: string
+                              format: uuid
+                              description: Unique file identifier
+                            fileName:
+                              type: string
+                              description: Original file name
+                            status:
+                              type: string
+                              enum:
+                                - uploaded
+                                - in progress
+                                - complete
+                                - failed
+                              description: File processing status
+                            downloadUrl:
+                              type: string
+                              format: uri
+                              nullable: true
+                              description: Download URL when complete
+                            errorMessage:
+                              type: string
+                              nullable: true
+                              description: Error message if failed
+                            createdAt:
+                              type: string
+                              format: date-time
+                              description: File upload timestamp
+                            updatedAt:
+                              type: string
+                              format: date-time
+                              description: Last update timestamp
         "401":
-          description: Authentication failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          description: Authentication failed - missing, invalid, deleted, or revoked API key
         "403":
-          description: Access denied — job belongs to a different API key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                statusCode: 403
-                error:
-                  message: "You do not have permission to access this job"
+          description: Access denied - job belongs to another account
         "404":
           description: Job not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                statuscode: 404
-                requestId: "abc123"
-                error: "Job not found"
         "429":
           description: Rate limit exceeded
         "500":
           description: Internal server error
+  /api/external/v1/deals:
+    post:
+      summary: Create a new deal
+      description: Create a deal to group and organize rent roll uploads. After
+        creating a deal, use the returned counterId as the dealId parameter when
+        uploading rent rolls. Requires an API key with an assigned user.
+      operationId: createDeal
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dealName
+              properties:
+                dealName:
+                  type: string
+                  description: Name of the deal
+                  example: Sunset Plaza Apartments
+                address:
+                  type: string
+                  description: Property address
+                  example: 123 Main St
+                city:
+                  type: string
+                  description: Property city
+                  example: Austin
+                state:
+                  type: string
+                  description: Property state
+                  example: TX
+                zip:
+                  type: string
+                  description: Property zip code
+                  example: "78701"
+                unitCount:
+                  type: integer
+                  description: Number of units in the property
+                  example: 128
+      responses:
+        "201":
+          description: Deal created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 201
+                  requestId:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/DealResponse"
+        "400":
+          description: Validation error
+        "401":
+          description: Authentication failed
+        "403":
+          description: API key does not have an assigned user
+        "429":
+          description: Rate limit exceeded
+    get:
+      summary: List deals
+      description: List all deals for your account with pagination and optional search.
+      operationId: listDeals
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+          description: Page number (1-based)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Number of deals per page (max 100)
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by deal name
+      responses:
+        "200":
+          description: Deals retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 200
+                  requestId:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      deals:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/DealResponse"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+        "401":
+          description: Authentication failed
+        "429":
+          description: Rate limit exceeded
+  /api/external/v1/deals/{counterId}:
+    get:
+      summary: Get a deal
+      description: Retrieve a specific deal by its counter ID.
+      operationId: getDeal
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: counterId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: The deal's counter ID
+      responses:
+        "200":
+          description: Deal retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 200
+                  requestId:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/DealResponse"
+        "401":
+          description: Authentication failed
+        "404":
+          description: Deal not found
+        "429":
+          description: Rate limit exceeded
+    put:
+      summary: Update a deal
+      description: Update an existing deal. Only the fields provided will be updated.
+        Requires an API key with an assigned user.
+      operationId: updateDeal
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: counterId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: The deal's counter ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dealName:
+                  type: string
+                  description: Name of the deal
+                address:
+                  type: string
+                  description: Property address
+                city:
+                  type: string
+                  description: Property city
+                state:
+                  type: string
+                  description: Property state
+                zip:
+                  type: string
+                  description: Property zip code
+                unitCount:
+                  type: integer
+                  description: Number of units in the property
+      responses:
+        "200":
+          description: Deal updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 200
+                  requestId:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/DealResponse"
+        "400":
+          description: Validation error
+        "401":
+          description: Authentication failed
+        "403":
+          description: API key does not have an assigned user
+        "404":
+          description: Deal not found
+        "429":
+          description: Rate limit exceeded
+    delete:
+      summary: Delete a deal
+      description: Soft-delete a deal. The deal will no longer appear in listings.
+        Requires an API key with an assigned user.
+      operationId: deleteDeal
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: counterId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: The deal's counter ID
+      responses:
+        "200":
+          description: Deal deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 200
+                  requestId:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: Deal 42 deleted successfully
+        "401":
+          description: Authentication failed
+        "403":
+          description: API key does not have an assigned user
+        "404":
+          description: Deal not found
+        "429":
+          description: Rate limit exceeded
+  /api/admin/api-keys:
+    get:
+      summary: List API keys for account
+      description: Retrieve all API keys for the authenticated user's account
+      operationId: listApiKeys
+      tags:
+        - API Key Management
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: API keys retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 200
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        keyPreview:
+                          type: string
+                          description: First 8 chars of key
+                        status:
+                          type: string
+                          enum:
+                            - active
+                            - revoked
+                        createdAt:
+                          type: string
+                          format: date-time
+                        lastUsedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+        "401":
+          description: Unauthorized
+    post:
+      summary: Create new API key
+      description: Generate a new API key for the account. The full key is only
+        returned once.
+      operationId: createApiKey
+      tags:
+        - API Key Management
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  maxLength: 100
+                  description: Descriptive name for the API key
+      responses:
+        "201":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 201
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      key:
+                        type: string
+                        description: Full API key - store securely, shown only once
+                      createdAt:
+                        type: string
+                        format: date-time
+        "401":
+          description: Unauthorized
+  /api/admin/api-keys/{id}:
+    get:
+      summary: Get API key details
+      operationId: getApiKey
+      tags:
+        - API Key Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: API key details
+        "404":
+          description: API key not found
+    delete:
+      summary: Delete API key
+      description: Permanently delete an API key. This action cannot be undone.
+      operationId: deleteApiKey
+      tags:
+        - API Key Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: API key deleted
+        "404":
+          description: API key not found
+  /api/admin/api-keys/{id}/revoke:
+    patch:
+      summary: Revoke API key
+      description: Revoke an API key. Revoked keys cannot be used but remain in the system.
+      operationId: revokeApiKey
+      tags:
+        - API Key Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: API key revoked
+        "404":
+          description: API key not found
+  /api/admin/api-keys/{id}/regenerate:
+    post:
+      summary: Regenerate API key
+      description: Generate a new key value. The old key becomes invalid immediately.
+      operationId: regenerateApiKey
+      tags:
+        - API Key Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: API key regenerated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statuscode:
+                    type: integer
+                    example: 200
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      key:
+                        type: string
+                        description: New API key - store securely
+        "404":
+          description: API key not found

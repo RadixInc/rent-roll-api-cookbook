@@ -107,6 +107,308 @@ function Show-YesNo(
   return [System.Windows.Forms.MessageBox]::Show($message, $title, $buttons, $mbIcon)
 }
 
+function Test-FilesReadable([string[]]$files) {
+  # Returns the base names of any files that cannot be opened for reading
+  # (e.g. Excel still has the file open with an exclusive lock).
+  $locked = @()
+  foreach ($f in $files) {
+    try {
+      $stream = [System.IO.File]::Open(
+        $f,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::Read
+      )
+      $stream.Close()
+      $stream.Dispose()
+    }
+    catch {
+      $locked += [System.IO.Path]::GetFileName($f)
+    }
+  }
+  return $locked
+}
+
+# ---------- Deal selection ----------
+function Show-DealChooser {
+  Add-Type -AssemblyName System.Windows.Forms | Out-Null
+  Add-Type -AssemblyName System.Drawing | Out-Null
+
+  $form = [System.Windows.Forms.Form]::new()
+  $form.Text = "Associate with a Deal - redIQ"
+  $form.Size = [System.Drawing.Size]::new(320, 245)
+  $form.StartPosition = "CenterScreen"
+  $form.FormBorderStyle = "FixedDialog"
+  $form.MaximizeBox = $false
+  $form.MinimizeBox = $false
+
+  $script:_dealChooserResult = "cancel"
+
+  $btnRecent = [System.Windows.Forms.Button]::new()
+  $btnRecent.Text = "Select Recent Deal"
+  $btnRecent.Size = [System.Drawing.Size]::new(264, 34)
+  $btnRecent.Location = [System.Drawing.Point]::new(20, 16)
+  $btnRecent.Add_Click({ $script:_dealChooserResult = "recent"; $form.Close() })
+
+  $btnSearch = [System.Windows.Forms.Button]::new()
+  $btnSearch.Text = "Search Deal by Name"
+  $btnSearch.Size = [System.Drawing.Size]::new(264, 34)
+  $btnSearch.Location = [System.Drawing.Point]::new(20, 58)
+  $btnSearch.Add_Click({ $script:_dealChooserResult = "search"; $form.Close() })
+
+  $btnCreate = [System.Windows.Forms.Button]::new()
+  $btnCreate.Text = "Create New Deal"
+  $btnCreate.Size = [System.Drawing.Size]::new(264, 34)
+  $btnCreate.Location = [System.Drawing.Point]::new(20, 100)
+  $btnCreate.Add_Click({ $script:_dealChooserResult = "create"; $form.Close() })
+
+  $btnSkip = [System.Windows.Forms.Button]::new()
+  $btnSkip.Text = "Upload Without Deal"
+  $btnSkip.Size = [System.Drawing.Size]::new(264, 34)
+  $btnSkip.Location = [System.Drawing.Point]::new(20, 142)
+  $btnSkip.Add_Click({ $script:_dealChooserResult = "skip"; $form.Close() })
+
+  $form.Controls.AddRange(@($btnRecent, $btnSearch, $btnCreate, $btnSkip))
+  try { $form.ShowDialog() | Out-Null } finally { $form.Dispose() }
+  return $script:_dealChooserResult
+}
+
+function Show-SearchBox {
+  Add-Type -AssemblyName System.Windows.Forms | Out-Null
+  Add-Type -AssemblyName System.Drawing | Out-Null
+
+  $form = [System.Windows.Forms.Form]::new()
+  $form.Text = "Search Deals - redIQ"
+  $form.Size = [System.Drawing.Size]::new(370, 130)
+  $form.StartPosition = "CenterScreen"
+  $form.FormBorderStyle = "FixedDialog"
+  $form.MaximizeBox = $false
+  $form.MinimizeBox = $false
+
+  $lbl = [System.Windows.Forms.Label]::new()
+  $lbl.Text = "Enter deal name to search:"
+  $lbl.Location = [System.Drawing.Point]::new(16, 16)
+  $lbl.Size = [System.Drawing.Size]::new(320, 20)
+
+  $txt = [System.Windows.Forms.TextBox]::new()
+  $txt.Location = [System.Drawing.Point]::new(16, 40)
+  $txt.Size = [System.Drawing.Size]::new(240, 24)
+
+  $btnSearch = [System.Windows.Forms.Button]::new()
+  $btnSearch.Text = "Search"
+  $btnSearch.Location = [System.Drawing.Point]::new(264, 38)
+  $btnSearch.Size = [System.Drawing.Size]::new(74, 28)
+  $btnSearch.DialogResult = [System.Windows.Forms.DialogResult]::OK
+
+  $form.AcceptButton = $btnSearch
+  $form.Controls.AddRange(@($lbl, $txt, $btnSearch))
+
+  $term = $null
+  try {
+    $dlgResult = $form.ShowDialog()
+    if ($dlgResult -eq [System.Windows.Forms.DialogResult]::OK) {
+      $term = $txt.Text.Trim()
+    }
+  } finally { $form.Dispose() }
+  if ([string]::IsNullOrWhiteSpace($term)) { return $null }
+  return $term
+}
+
+function Get-RecentDeals([string]$baseUrl, [string]$authHeader) {
+  $uri = "$baseUrl/api/external/v1/deals?limit=100"
+  $response = Invoke-RestMethod -Uri $uri -Method Get `
+    -Headers @{ Authorization = $authHeader }
+  return @($response.data.deals)
+}
+
+function Get-DealsBySearch([string]$baseUrl, [string]$authHeader, [string]$searchTerm) {
+  $encoded = [System.Uri]::EscapeDataString($searchTerm)
+  $uri = "$baseUrl/api/external/v1/deals?search=$encoded&limit=100"
+  $response = Invoke-RestMethod -Uri $uri -Method Get `
+    -Headers @{ Authorization = $authHeader }
+  return @($response.data.deals)
+}
+
+function Show-DealPicker([array]$deals) {
+  if ($null -eq $deals -or $deals.Count -eq 0) { return $null }
+
+  $gridItems = $deals | ForEach-Object {
+    [PSCustomObject]@{
+      ID      = $_.counterId
+      Name    = $_.dealName
+      Address = $_.address
+      City    = $_.city
+      State   = $_.state
+      Zip     = $_.zip
+      Units   = $_.unitCount
+    }
+  }
+
+  return ($gridItems | Out-GridView -Title "Select a Deal - redIQ" -OutputMode Single)
+}
+
+function Show-CreateDealForm {
+  Add-Type -AssemblyName System.Windows.Forms | Out-Null
+  Add-Type -AssemblyName System.Drawing | Out-Null
+
+  $form = [System.Windows.Forms.Form]::new()
+  $form.Text = "Create New Deal - redIQ"
+  $form.Size = [System.Drawing.Size]::new(390, 330)
+  $form.StartPosition = "CenterScreen"
+  $form.FormBorderStyle = "FixedDialog"
+  $form.MaximizeBox = $false
+  $form.MinimizeBox = $false
+
+  $fieldDefs = [ordered]@{
+    "dealName"  = "Deal Name"
+    "address"   = "Address"
+    "city"      = "City"
+    "state"     = "State"
+    "zip"       = "Zip"
+    "unitCount" = "Unit Count"
+  }
+
+  $inputs = @{}
+  $y = 16
+  foreach ($key in $fieldDefs.Keys) {
+    $lbl = [System.Windows.Forms.Label]::new()
+    $lbl.Text = "$($fieldDefs[$key]) *"
+    $lbl.Location = [System.Drawing.Point]::new(16, ($y + 2))
+    $lbl.Size = [System.Drawing.Size]::new(110, 20)
+
+    $txt = [System.Windows.Forms.TextBox]::new()
+    $txt.Location = [System.Drawing.Point]::new(132, $y)
+    $txt.Size = [System.Drawing.Size]::new(224, 24)
+    $inputs[$key] = $txt
+
+    $form.Controls.AddRange(@($lbl, $txt))
+    $y += 34
+  }
+
+  $errLabel = [System.Windows.Forms.Label]::new()
+  $errLabel.ForeColor = [System.Drawing.Color]::Red
+  $errLabel.Location = [System.Drawing.Point]::new(16, $y)
+  $errLabel.Size = [System.Drawing.Size]::new(348, 20)
+  $form.Controls.Add($errLabel)
+  $y += 28
+
+  $btnCreate = [System.Windows.Forms.Button]::new()
+  $btnCreate.Text = "Create"
+  $btnCreate.Location = [System.Drawing.Point]::new(132, $y)
+  $btnCreate.Size = [System.Drawing.Size]::new(104, 30)
+
+  $btnCancel = [System.Windows.Forms.Button]::new()
+  $btnCancel.Text = "Cancel"
+  $btnCancel.Location = [System.Drawing.Point]::new(252, $y)
+  $btnCancel.Size = [System.Drawing.Size]::new(104, 30)
+  $btnCancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+  $form.CancelButton = $btnCancel
+
+  $script:formResult = $null
+
+  $btnCreate.Add_Click({
+    # Validate all fields present
+    foreach ($k in $inputs.Keys) {
+      if ([string]::IsNullOrWhiteSpace($inputs[$k].Text)) {
+        $errLabel.Text = "All fields are required."
+        return
+      }
+    }
+    # Validate unitCount is a positive integer
+    $ucInt = 0
+    if (-not [int]::TryParse($inputs["unitCount"].Text.Trim(), [ref]$ucInt) -or $ucInt -le 0) {
+      $errLabel.Text = "Unit Count must be a positive whole number."
+      return
+    }
+    $script:formResult = [PSCustomObject]@{
+      dealName  = $inputs["dealName"].Text.Trim()
+      address   = $inputs["address"].Text.Trim()
+      city      = $inputs["city"].Text.Trim()
+      state     = $inputs["state"].Text.Trim()
+      zip       = $inputs["zip"].Text.Trim()
+      unitCount = $ucInt
+    }
+    $form.Close()
+  })
+
+  $form.AcceptButton = $btnCreate
+  $form.Controls.AddRange(@($btnCreate, $btnCancel))
+  try { $form.ShowDialog() | Out-Null } finally { $form.Dispose() }
+  return $script:formResult
+}
+
+function Invoke-CreateDeal([PSCustomObject]$dealData, [string]$baseUrl, [string]$authHeader) {
+  $uri  = "$baseUrl/api/external/v1/deals"
+  $body = $dealData | ConvertTo-Json -Compress
+  $response = Invoke-RestMethod -Uri $uri -Method Post `
+    -Headers @{ Authorization = $authHeader } `
+    -ContentType "application/json" `
+    -Body $body
+  $id = $response.data.counterId
+  if (-not $id) { throw "API did not return a counterId. Response: $($response | ConvertTo-Json -Compress)" }
+  return [string]$id
+}
+
+function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
+  # :chooserLoop label is required — bare `continue` inside a switch targets the switch,
+  # not the enclosing while loop. `continue chooserLoop` correctly re-runs the chooser.
+  :chooserLoop while ($true) {
+    $choice = Show-DealChooser
+
+    switch ($choice) {
+      "recent" {
+        try {
+          $deals = Get-RecentDeals -baseUrl $baseUrl -authHeader $authHeader
+          if ($deals.Count -eq 0) {
+            Show-Popup "redIQ" "No deals found. Try creating one first." "Warning"
+            continue chooserLoop
+          }
+          $selected = Show-DealPicker -deals $deals
+          if ($null -ne $selected) { return [string]$selected.ID }
+          # User closed Out-GridView without selecting — loop back to chooser
+        }
+        catch {
+          Show-Popup "redIQ Deal Error" "Could not load deals:`n$($_.Exception.Message)" "Error"
+        }
+      }
+      "search" {
+        $term = Show-SearchBox
+        if ($null -eq $term) { continue chooserLoop }
+        try {
+          $deals = Get-DealsBySearch -baseUrl $baseUrl -authHeader $authHeader -searchTerm $term
+          if ($deals.Count -eq 0) {
+            Show-Popup "redIQ" "No deals matched '$term'.`nTry a different search term." "Warning"
+            continue chooserLoop
+          }
+          $selected = Show-DealPicker -deals $deals
+          if ($null -ne $selected) { return [string]$selected.ID }
+        }
+        catch {
+          Show-Popup "redIQ Deal Error" "Search failed:`n$($_.Exception.Message)" "Error"
+        }
+      }
+      "create" {
+        $formData = Show-CreateDealForm
+        if ($null -eq $formData) { continue chooserLoop }
+        try {
+          $newId = Invoke-CreateDeal -dealData $formData -baseUrl $baseUrl -authHeader $authHeader
+          Log "Created deal '$($formData.dealName)' -> counterId=$newId"
+          return [string]$newId
+        }
+        catch {
+          Show-Popup "redIQ Deal Error" "Could not create deal:`n$($_.Exception.Message)" "Error"
+        }
+      }
+      "skip"   { return $null }
+      default  {
+        # "cancel" - user closed chooser with X button
+        Log "User cancelled at deal selection."
+        exit 0
+      }
+    }
+  }
+}
+
 # ---------- Credential + config ----------
 function Initialize-CredentialManager {
   if (-not (Get-Module -ListAvailable -Name CredentialManager)) {
@@ -240,6 +542,17 @@ try {
     Log "Truncated to $maxFiles files (API limit)."
   }
 
+  # --- Check files are readable (not locked by another process) ---
+  $lockedFiles = Test-FilesReadable -files $validFiles
+  if ($lockedFiles.Count -gt 0) {
+    $names = $lockedFiles -join "`n  "
+    $msg  = "The following file(s) are in use by another application (e.g. Excel):`n`n  $names`n`n"
+    $msg += "Please close the file(s) and try the upload again."
+    Log "Upload cancelled: file(s) locked: $($lockedFiles -join '; ')"
+    Show-Popup "redIQ Upload Error" $msg "Error"
+    exit 1
+  }
+
   # --- Config + API key ---
   $cfg    = Get-Config
   $apiKey = (Get-ApiKey).Trim()
@@ -262,6 +575,10 @@ try {
 
   $baseUrl   = ($cfg.serverBaseUrl).TrimEnd("/")
   $uploadUrl = "$baseUrl/api/external/v1/upload"
+
+  # --- Deal association ---
+  $dealId = Resolve-DealId -baseUrl $baseUrl -authHeader $apiKey
+  if ($dealId) { Log "Deal association: dealId=$dealId" }
 
   $methods = @($cfg.notificationMethods)
   if ($methods.Count -eq 0) {
@@ -300,6 +617,12 @@ try {
 
     # Add notification method as a plain string field
     $form.Add([System.Net.Http.StringContent]::new($notificationJson), "notificationMethod")
+
+    # Add dealId if a deal was selected
+    if ($dealId) {
+      $form.Add([System.Net.Http.StringContent]::new($dealId), "dealId")
+      Log "Included dealId=$dealId in upload request"
+    }
 
     Log "Sending request..."
     $response = $httpClient.PostAsync($uploadUrl, $form).Result
