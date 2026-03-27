@@ -318,11 +318,13 @@ function Invoke-CreateDeal([PSCustomObject]$dealData, [string]$baseUrl, [string]
     -Headers @{ Authorization = $authHeader } `
     -ContentType "application/json" `
     -Body $body
-  return $response.data.counterId
+  $id = $response.data.counterId
+  if (-not $id) { throw "API did not return a counterId. Response: $($response | ConvertTo-Json -Compress)" }
+  return [string]$id
 }
 
 function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
-  while ($true) {
+  :chooserLoop while ($true) {
     $choice = Show-DealChooser
 
     switch ($choice) {
@@ -331,7 +333,7 @@ function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
           $deals = Get-RecentDeals -baseUrl $baseUrl -authHeader $authHeader
           if ($deals.Count -eq 0) {
             Show-Popup "redIQ" "No deals found. Try creating one first." "Warning"
-            continue
+            continue chooserLoop
           }
           $selected = Show-DealPicker -deals $deals
           if ($null -ne $selected) { return [string]$selected.ID }
@@ -343,12 +345,12 @@ function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
       }
       "search" {
         $term = Show-SearchBox
-        if ($null -eq $term) { continue }
+        if ($null -eq $term) { continue chooserLoop }
         try {
           $deals = Get-DealsBySearch -baseUrl $baseUrl -authHeader $authHeader -searchTerm $term
           if ($deals.Count -eq 0) {
             Show-Popup "redIQ" "No deals matched '$term'.`nTry a different search term." "Warning"
-            continue
+            continue chooserLoop
           }
           $selected = Show-DealPicker -deals $deals
           if ($null -ne $selected) { return [string]$selected.ID }
@@ -359,7 +361,7 @@ function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
       }
       "create" {
         $formData = Show-CreateDealForm
-        if ($null -eq $formData) { continue }
+        if ($null -eq $formData) { continue chooserLoop }
         try {
           $newId = Invoke-CreateDeal -dealData $formData -baseUrl $baseUrl -authHeader $authHeader
           Log "Created deal '$($formData.dealName)' -> counterId=$newId"
@@ -373,7 +375,7 @@ function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
       default  {
         # "cancel" - user closed chooser with X button
         Log "User cancelled at deal selection."
-        exit 0
+        return "#cancel#"
       }
     }
   }
