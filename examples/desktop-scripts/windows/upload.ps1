@@ -120,35 +120,35 @@ function Show-DealChooser {
   $form.MaximizeBox = $false
   $form.MinimizeBox = $false
 
-  $script:result = "cancel"
+  $script:_dealChooserResult = "cancel"
 
   $btnRecent = [System.Windows.Forms.Button]::new()
   $btnRecent.Text = "Select Recent Deal"
   $btnRecent.Size = [System.Drawing.Size]::new(264, 34)
   $btnRecent.Location = [System.Drawing.Point]::new(20, 16)
-  $btnRecent.Add_Click({ $script:result = "recent"; $form.Close() })
+  $btnRecent.Add_Click({ $script:_dealChooserResult = "recent"; $form.Close() })
 
   $btnSearch = [System.Windows.Forms.Button]::new()
   $btnSearch.Text = "Search Deal by Name"
   $btnSearch.Size = [System.Drawing.Size]::new(264, 34)
   $btnSearch.Location = [System.Drawing.Point]::new(20, 58)
-  $btnSearch.Add_Click({ $script:result = "search"; $form.Close() })
+  $btnSearch.Add_Click({ $script:_dealChooserResult = "search"; $form.Close() })
 
   $btnCreate = [System.Windows.Forms.Button]::new()
   $btnCreate.Text = "Create New Deal"
   $btnCreate.Size = [System.Drawing.Size]::new(264, 34)
   $btnCreate.Location = [System.Drawing.Point]::new(20, 100)
-  $btnCreate.Add_Click({ $script:result = "create"; $form.Close() })
+  $btnCreate.Add_Click({ $script:_dealChooserResult = "create"; $form.Close() })
 
   $btnSkip = [System.Windows.Forms.Button]::new()
   $btnSkip.Text = "Upload Without Deal"
   $btnSkip.Size = [System.Drawing.Size]::new(264, 34)
   $btnSkip.Location = [System.Drawing.Point]::new(20, 142)
-  $btnSkip.Add_Click({ $script:result = "skip"; $form.Close() })
+  $btnSkip.Add_Click({ $script:_dealChooserResult = "skip"; $form.Close() })
 
   $form.Controls.AddRange(@($btnRecent, $btnSearch, $btnCreate, $btnSkip))
   try { $form.ShowDialog() | Out-Null } finally { $form.Dispose() }
-  return $script:result
+  return $script:_dealChooserResult
 }
 
 function Show-SearchBox {
@@ -181,9 +181,13 @@ function Show-SearchBox {
   $form.AcceptButton = $btnSearch
   $form.Controls.AddRange(@($lbl, $txt, $btnSearch))
 
-  try { $dlgResult = $form.ShowDialog() } finally { $form.Dispose() }
-  if ($dlgResult -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
-  $term = $txt.Text.Trim()
+  $term = $null
+  try {
+    $dlgResult = $form.ShowDialog()
+    if ($dlgResult -eq [System.Windows.Forms.DialogResult]::OK) {
+      $term = $txt.Text.Trim()
+    }
+  } finally { $form.Dispose() }
   if ([string]::IsNullOrWhiteSpace($term)) { return $null }
   return $term
 }
@@ -324,6 +328,8 @@ function Invoke-CreateDeal([PSCustomObject]$dealData, [string]$baseUrl, [string]
 }
 
 function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
+  # :chooserLoop label is required — bare `continue` inside a switch targets the switch,
+  # not the enclosing while loop. `continue chooserLoop` correctly re-runs the chooser.
   :chooserLoop while ($true) {
     $choice = Show-DealChooser
 
@@ -375,7 +381,7 @@ function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
       default  {
         # "cancel" - user closed chooser with X button
         Log "User cancelled at deal selection."
-        return "#cancel#"
+        exit 0
       }
     }
   }
@@ -538,12 +544,7 @@ try {
   $uploadUrl = "$baseUrl/api/external/v1/upload"
 
   # --- Deal association ---
-  # NOTE: This sentinel check MUST come before the `if ($dealId)` guard below.
-  # Resolve-DealId returns "#cancel#" when the user closes the chooser with X.
   $dealId = Resolve-DealId -baseUrl $baseUrl -authHeader $apiKey
-  if ($dealId -eq "#cancel#") {
-    exit 0
-  }
   if ($dealId) { Log "Deal association: dealId=$dealId" }
 
   $methods = @($cfg.notificationMethods)
