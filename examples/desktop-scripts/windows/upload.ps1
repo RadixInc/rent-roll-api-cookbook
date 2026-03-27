@@ -107,6 +107,28 @@ function Show-YesNo(
   return [System.Windows.Forms.MessageBox]::Show($message, $title, $buttons, $mbIcon)
 }
 
+function Test-FilesReadable([string[]]$files) {
+  # Returns the base names of any files that cannot be opened for reading
+  # (e.g. Excel still has the file open with an exclusive lock).
+  $locked = @()
+  foreach ($f in $files) {
+    try {
+      $stream = [System.IO.File]::Open(
+        $f,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::Read
+      )
+      $stream.Close()
+      $stream.Dispose()
+    }
+    catch {
+      $locked += [System.IO.Path]::GetFileName($f)
+    }
+  }
+  return $locked
+}
+
 # ---------- Deal selection ----------
 function Show-DealChooser {
   Add-Type -AssemblyName System.Windows.Forms | Out-Null
@@ -518,6 +540,17 @@ try {
     Show-Popup "redIQ Upload Warning" $msg "Warning"
     $validFiles = @($validFiles[0..($maxFiles - 1)])
     Log "Truncated to $maxFiles files (API limit)."
+  }
+
+  # --- Check files are readable (not locked by another process) ---
+  $lockedFiles = Test-FilesReadable -files $validFiles
+  if ($lockedFiles.Count -gt 0) {
+    $names = $lockedFiles -join "`n  "
+    $msg  = "The following file(s) are in use by another application (e.g. Excel):`n`n  $names`n`n"
+    $msg += "Please close the file(s) and try the upload again."
+    Log "Upload cancelled: file(s) locked: $($lockedFiles -join '; ')"
+    Show-Popup "redIQ Upload Error" $msg "Error"
+    exit 1
   }
 
   # --- Config + API key ---
