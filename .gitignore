@@ -31,4 +31,6 @@ build/
 *.log
 npm-debug.log*
 
-
+# Superpowers / Claude
+.claude/
+docs/
