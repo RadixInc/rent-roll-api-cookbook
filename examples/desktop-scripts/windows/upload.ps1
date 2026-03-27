@@ -120,7 +120,7 @@ function Show-DealChooser {
   $form.MaximizeBox = $false
   $form.MinimizeBox = $false
 
-  $result = "cancel"
+  $script:result = "cancel"
 
   $btnRecent = [System.Windows.Forms.Button]::new()
   $btnRecent.Text = "Select Recent Deal"
@@ -147,8 +147,8 @@ function Show-DealChooser {
   $btnSkip.Add_Click({ $script:result = "skip"; $form.Close() })
 
   $form.Controls.AddRange(@($btnRecent, $btnSearch, $btnCreate, $btnSkip))
-  $form.ShowDialog() | Out-Null
-  return $result
+  try { $form.ShowDialog() | Out-Null } finally { $form.Dispose() }
+  return $script:result
 }
 
 function Show-SearchBox {
@@ -181,7 +181,7 @@ function Show-SearchBox {
   $form.AcceptButton = $btnSearch
   $form.Controls.AddRange(@($lbl, $txt, $btnSearch))
 
-  $dlgResult = $form.ShowDialog()
+  try { $dlgResult = $form.ShowDialog() } finally { $form.Dispose() }
   if ($dlgResult -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
   $term = $txt.Text.Trim()
   if ([string]::IsNullOrWhiteSpace($term)) { return $null }
