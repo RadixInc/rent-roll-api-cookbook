@@ -311,6 +311,74 @@ function Show-CreateDealForm {
   return $script:formResult
 }
 
+function Invoke-CreateDeal([PSCustomObject]$dealData, [string]$baseUrl, [string]$authHeader) {
+  $uri  = "$baseUrl/api/external/v1/deals"
+  $body = $dealData | ConvertTo-Json -Compress
+  $response = Invoke-RestMethod -Uri $uri -Method Post `
+    -Headers @{ Authorization = $authHeader } `
+    -ContentType "application/json" `
+    -Body $body
+  return $response.data.counterId
+}
+
+function Resolve-DealId([string]$baseUrl, [string]$authHeader) {
+  while ($true) {
+    $choice = Show-DealChooser
+
+    switch ($choice) {
+      "recent" {
+        try {
+          $deals = Get-RecentDeals -baseUrl $baseUrl -authHeader $authHeader
+          if ($deals.Count -eq 0) {
+            Show-Popup "redIQ" "No deals found. Try creating one first." "Warning"
+            continue
+          }
+          $selected = Show-DealPicker -deals $deals
+          if ($null -ne $selected) { return [string]$selected.ID }
+          # User closed Out-GridView without selecting — loop back to chooser
+        }
+        catch {
+          Show-Popup "redIQ Deal Error" "Could not load deals:`n$($_.Exception.Message)" "Error"
+        }
+      }
+      "search" {
+        $term = Show-SearchBox
+        if ($null -eq $term) { continue }
+        try {
+          $deals = Get-DealsBySearch -baseUrl $baseUrl -authHeader $authHeader -searchTerm $term
+          if ($deals.Count -eq 0) {
+            Show-Popup "redIQ" "No deals matched '$term'.`nTry a different search term." "Warning"
+            continue
+          }
+          $selected = Show-DealPicker -deals $deals
+          if ($null -ne $selected) { return [string]$selected.ID }
+        }
+        catch {
+          Show-Popup "redIQ Deal Error" "Search failed:`n$($_.Exception.Message)" "Error"
+        }
+      }
+      "create" {
+        $formData = Show-CreateDealForm
+        if ($null -eq $formData) { continue }
+        try {
+          $newId = Invoke-CreateDeal -dealData $formData -baseUrl $baseUrl -authHeader $authHeader
+          Log "Created deal '$($formData.dealName)' -> counterId=$newId"
+          return [string]$newId
+        }
+        catch {
+          Show-Popup "redIQ Deal Error" "Could not create deal:`n$($_.Exception.Message)" "Error"
+        }
+      }
+      "skip"   { return $null }
+      default  {
+        # "cancel" - user closed chooser with X button
+        Log "User cancelled at deal selection."
+        exit 0
+      }
+    }
+  }
+}
+
 # ---------- Credential + config ----------
 function Initialize-CredentialManager {
   if (-not (Get-Module -ListAvailable -Name CredentialManager)) {
