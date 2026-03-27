@@ -305,6 +305,7 @@ function Show-CreateDealForm {
     $form.Close()
   })
 
+  $form.AcceptButton = $btnCreate
   $form.Controls.AddRange(@($btnCreate, $btnCancel))
   try { $form.ShowDialog() | Out-Null } finally { $form.Dispose() }
   return $script:formResult
