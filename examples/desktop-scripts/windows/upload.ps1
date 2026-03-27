@@ -221,6 +221,95 @@ function Show-DealPicker([array]$deals) {
   return ($gridItems | Out-GridView -Title "Select a Deal - redIQ" -OutputMode Single)
 }
 
+function Show-CreateDealForm {
+  Add-Type -AssemblyName System.Windows.Forms | Out-Null
+  Add-Type -AssemblyName System.Drawing | Out-Null
+
+  $form = [System.Windows.Forms.Form]::new()
+  $form.Text = "Create New Deal - redIQ"
+  $form.Size = [System.Drawing.Size]::new(390, 330)
+  $form.StartPosition = "CenterScreen"
+  $form.FormBorderStyle = "FixedDialog"
+  $form.MaximizeBox = $false
+  $form.MinimizeBox = $false
+
+  $fieldDefs = [ordered]@{
+    "dealName"  = "Deal Name"
+    "address"   = "Address"
+    "city"      = "City"
+    "state"     = "State"
+    "zip"       = "Zip"
+    "unitCount" = "Unit Count"
+  }
+
+  $inputs = @{}
+  $y = 16
+  foreach ($key in $fieldDefs.Keys) {
+    $lbl = [System.Windows.Forms.Label]::new()
+    $lbl.Text = "$($fieldDefs[$key]) *"
+    $lbl.Location = [System.Drawing.Point]::new(16, ($y + 2))
+    $lbl.Size = [System.Drawing.Size]::new(110, 20)
+
+    $txt = [System.Windows.Forms.TextBox]::new()
+    $txt.Location = [System.Drawing.Point]::new(132, $y)
+    $txt.Size = [System.Drawing.Size]::new(224, 24)
+    $inputs[$key] = $txt
+
+    $form.Controls.AddRange(@($lbl, $txt))
+    $y += 34
+  }
+
+  $errLabel = [System.Windows.Forms.Label]::new()
+  $errLabel.ForeColor = [System.Drawing.Color]::Red
+  $errLabel.Location = [System.Drawing.Point]::new(16, $y)
+  $errLabel.Size = [System.Drawing.Size]::new(348, 20)
+  $form.Controls.Add($errLabel)
+  $y += 28
+
+  $btnCreate = [System.Windows.Forms.Button]::new()
+  $btnCreate.Text = "Create"
+  $btnCreate.Location = [System.Drawing.Point]::new(132, $y)
+  $btnCreate.Size = [System.Drawing.Size]::new(104, 30)
+
+  $btnCancel = [System.Windows.Forms.Button]::new()
+  $btnCancel.Text = "Cancel"
+  $btnCancel.Location = [System.Drawing.Point]::new(252, $y)
+  $btnCancel.Size = [System.Drawing.Size]::new(104, 30)
+  $btnCancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+  $form.CancelButton = $btnCancel
+
+  $script:formResult = $null
+
+  $btnCreate.Add_Click({
+    # Validate all fields present
+    foreach ($k in $inputs.Keys) {
+      if ([string]::IsNullOrWhiteSpace($inputs[$k].Text)) {
+        $errLabel.Text = "All fields are required."
+        return
+      }
+    }
+    # Validate unitCount is a positive integer
+    $ucInt = 0
+    if (-not [int]::TryParse($inputs["unitCount"].Text.Trim(), [ref]$ucInt) -or $ucInt -le 0) {
+      $errLabel.Text = "Unit Count must be a positive whole number."
+      return
+    }
+    $script:formResult = [PSCustomObject]@{
+      dealName  = $inputs["dealName"].Text.Trim()
+      address   = $inputs["address"].Text.Trim()
+      city      = $inputs["city"].Text.Trim()
+      state     = $inputs["state"].Text.Trim()
+      zip       = $inputs["zip"].Text.Trim()
+      unitCount = $ucInt
+    }
+    $form.Close()
+  })
+
+  $form.Controls.AddRange(@($btnCreate, $btnCancel))
+  try { $form.ShowDialog() | Out-Null } finally { $form.Dispose() }
+  return $script:formResult
+}
+
 # ---------- Credential + config ----------
 function Initialize-CredentialManager {
   if (-not (Get-Module -ListAvailable -Name CredentialManager)) {
