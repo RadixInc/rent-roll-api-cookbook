@@ -188,6 +188,39 @@ function Show-SearchBox {
   return $term
 }
 
+function Get-RecentDeals([string]$baseUrl, [string]$authHeader) {
+  $uri = "$baseUrl/api/external/v1/deals?limit=100"
+  $response = Invoke-RestMethod -Uri $uri -Method Get `
+    -Headers @{ Authorization = $authHeader }
+  return @($response.data.deals)
+}
+
+function Get-DealsBySearch([string]$baseUrl, [string]$authHeader, [string]$searchTerm) {
+  $encoded = [System.Uri]::EscapeDataString($searchTerm)
+  $uri = "$baseUrl/api/external/v1/deals?search=$encoded&limit=100"
+  $response = Invoke-RestMethod -Uri $uri -Method Get `
+    -Headers @{ Authorization = $authHeader }
+  return @($response.data.deals)
+}
+
+function Show-DealPicker([array]$deals) {
+  if ($null -eq $deals -or $deals.Count -eq 0) { return $null }
+
+  $gridItems = $deals | ForEach-Object {
+    [PSCustomObject]@{
+      ID      = $_.counterId
+      Name    = $_.dealName
+      Address = $_.address
+      City    = $_.city
+      State   = $_.state
+      Zip     = $_.zip
+      Units   = $_.unitCount
+    }
+  }
+
+  return ($gridItems | Out-GridView -Title "Select a Deal - redIQ" -OutputMode Single)
+}
+
 # ---------- Credential + config ----------
 function Initialize-CredentialManager {
   if (-not (Get-Module -ListAvailable -Name CredentialManager)) {
