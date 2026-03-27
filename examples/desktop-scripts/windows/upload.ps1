@@ -537,6 +537,13 @@ try {
   $baseUrl   = ($cfg.serverBaseUrl).TrimEnd("/")
   $uploadUrl = "$baseUrl/api/external/v1/upload"
 
+  # --- Deal association ---
+  $dealId = Resolve-DealId -baseUrl $baseUrl -authHeader $apiKey
+  if ($dealId -eq "#cancel#") {
+    exit 0
+  }
+  if ($dealId) { Log "Deal association: dealId=$dealId" }
+
   $methods = @($cfg.notificationMethods)
   if ($methods.Count -eq 0) {
     throw "No notification methods configured. Run setup.ps1 again and set at least an email or webhook."
@@ -574,6 +581,12 @@ try {
 
     # Add notification method as a plain string field
     $form.Add([System.Net.Http.StringContent]::new($notificationJson), "notificationMethod")
+
+    # Add dealId if a deal was selected
+    if ($dealId) {
+      $form.Add([System.Net.Http.StringContent]::new($dealId), "dealId")
+      Log "Included dealId=$dealId in upload request"
+    }
 
     Log "Sending request..."
     $response = $httpClient.PostAsync($uploadUrl, $form).Result
