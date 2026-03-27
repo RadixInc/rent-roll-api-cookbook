@@ -538,6 +538,8 @@ try {
   $uploadUrl = "$baseUrl/api/external/v1/upload"
 
   # --- Deal association ---
+  # NOTE: This sentinel check MUST come before the `if ($dealId)` guard below.
+  # Resolve-DealId returns "#cancel#" when the user closes the chooser with X.
   $dealId = Resolve-DealId -baseUrl $baseUrl -authHeader $apiKey
   if ($dealId -eq "#cancel#") {
     exit 0
