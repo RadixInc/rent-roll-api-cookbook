@@ -2,7 +2,7 @@
 
 A lightweight Model Context Protocol (MCP) server for interacting with the Radix / RedIQ Rent Roll Processing API.
 
-This server provides a clean interface for uploading rent rolls, monitoring processing status, and retrieving results. It is designed for automation, integrations, and AI assistants that need direct access to the Rent roll API.
+This server provides a clean interface for uploading rent rolls, managing deals, monitoring processing status, and retrieving results. It is designed for automation, integrations, and AI assistants that need direct access to the Rent roll API.
 
 ---
 
@@ -10,9 +10,12 @@ This server provides a clean interface for uploading rent rolls, monitoring proc
 
 The Core MCP exposes a minimal, predictable API surface:
 
-- Upload rent roll files  
-- Check processing status  
-- Retrieve download URLs for processed outputs  
+- Create, list, get, update, and delete deals
+- Upload rent roll files, including optional `deal_id`
+- Check processing status
+- Retrieve download URLs for processed outputs
+
+Only one `dealId` is allowed per upload request, so all files in that batch will be linked to the same deal.
 
 This MCP does **not** perform workflow orchestration, ZIP extraction, or data previewing.  
 For those capabilities, see the **Agent MCP**.
@@ -80,7 +83,7 @@ Register the server by pointing your MCP client to `server.py`.
   "mcpServers": {
     "radix-rent-roll-core": {
       "command": "python3",
-      "args": ["/path/to/server.py"],
+      "args": ["/path/to/rent-roll-api-cookbook-1/MCP/core-mcp/server.py"],
       "env": {
         "RADIX_API_KEY": "your-api-key-here",
         "RADIX_API_URL": "https://connect.rediq.io"
@@ -127,6 +130,10 @@ Once configured, an MCP-enabled client can issue commands such as:
 
 > Get the download URLs for batch 17a34571-f35b-49ad-98a6-6550bab3c507
 
+## API Update Note
+
+If your automation needs to organize uploads by redIQ deal, use `create_deal` or `list_deals` / `get_deal` to find the target `counterId`, then send that value as upload `deal_id`. Because the API accepts only one `dealId` per upload request, folder-processing automations should send separate batches for separate deals.
+
 ---
 
 ## Available Tools
@@ -138,9 +145,80 @@ Upload rent roll files for processing.
 | Parameter            | Type      | Required | Description                        |
 | -------------------- | --------- | -------- | ---------------------------------- |
 | `file_paths`         | list[str] | Yes      | Absolute paths to rent roll files  |
-| `notification_email` | str       | Yes      | Email for completion notifications |
+| `notification_email` | str       | No       | Optional email notification target |
 | `webhook_url`        | str       | No       | Optional webhook URL               |
+| `deal_id`            | int       | No       | Optional deal counterId for the entire batch |
 | `api_key`            | str       | No       | Override the RADIX_API_KEY env var |
+
+Provide at least one of `notification_email` or `webhook_url`.
+
+---
+
+### create_deal
+
+Create a deal and return its `counterId`.
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `deal_name` | str | Yes | Deal name |
+| `address` | str | No | Property address |
+| `city` | str | No | Property city |
+| `state` | str | No | Property state |
+| `zip` | str | No | Property zip code |
+| `unit_count` | int | No | Property unit count |
+| `api_key` | str | No | Override the RADIX_API_KEY env var |
+
+---
+
+### list_deals
+
+List deals for the authenticated account.
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `page` | int | No | Page number, default `1` |
+| `limit` | int | No | Page size, default `20` |
+| `search` | str | No | Optional deal name search |
+| `api_key` | str | No | Override the RADIX_API_KEY env var |
+
+---
+
+### get_deal
+
+Retrieve one deal by its `counterId`.
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `counter_id` | int | Yes | Deal counterId |
+| `api_key` | str | No | Override the RADIX_API_KEY env var |
+
+---
+
+### update_deal
+
+Update one or more fields on an existing deal.
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `counter_id` | int | Yes | Deal counterId |
+| `deal_name` | str | No | Updated deal name |
+| `address` | str | No | Updated property address |
+| `city` | str | No | Updated property city |
+| `state` | str | No | Updated property state |
+| `zip` | str | No | Updated property zip code |
+| `unit_count` | int | No | Updated unit count |
+| `api_key` | str | No | Override the RADIX_API_KEY env var |
+
+---
+
+### delete_deal
+
+Soft-delete a deal by its `counterId`.
+
+| Parameter | Type | Required | Description |
+| --------- | ---- | -------- | ----------- |
+| `counter_id` | int | Yes | Deal counterId |
+| `api_key` | str | No | Override the RADIX_API_KEY env var |
 
 ---
 

@@ -1,67 +1,50 @@
 # Node.js Example
 
-Upload rent roll files and poll for results using Node.js with zero external dependencies.
-
-Uses the built-in `fetch` and `FormData` APIs available in Node.js 18+.
+A zero-dependency Node.js CLI example for the RedIQ external API using the built-in `fetch` and `FormData` APIs.
 
 ## Prerequisites
 
 - Node.js 18+
 
-No `npm install` required.
-
 ## Setup
 
 ```bash
 export RADIX_API_KEY="riq_live_your_api_key_here"
+export RADIX_API_URL="https://connect.rediq.io" # optional
 ```
 
-## Usage
+## Commands
 
 ```bash
-# Upload a single file with email notification
-node upload.mjs rent-roll.xlsx --email user@example.com
+# Upload and poll
+node upload.mjs upload rent-roll.xlsx --email user@example.com
 
-# Upload multiple files
-node upload.mjs file1.xlsx file2.xlsx --email user@example.com
+# Upload with webhook only
+node upload.mjs upload rent-roll.xlsx --webhook https://hooks.example.com/rent-roll
 
-# Upload with a webhook callback
-node upload.mjs rent-roll.xlsx --webhook https://hooks.example.com/abc
+# Upload and attach to a deal
+node upload.mjs upload file1.xlsx file2.xlsx --email user@example.com --deal-id 42
 
-# Upload only (skip polling)
-node upload.mjs rent-roll.xlsx --no-poll
+# Upload only
+node upload.mjs upload rent-roll.xlsx --email user@example.com --no-poll
+
+# Batch status
+node upload.mjs status 6af30011-af82-4425-a1ad-406db4b0995c
+
+# Deals CRUD
+node upload.mjs deals:create --deal-name "Sunset Plaza Apartments" --city Austin --state TX --unit-count 128
+node upload.mjs deals:list --search Sunset
+node upload.mjs deals:get 42
+node upload.mjs deals:update 42 --deal-name "Sunset Plaza Phase II" --unit-count 132
+node upload.mjs deals:delete 42
 ```
 
-## Options
+You can also write deal commands as `node upload.mjs deals list ...` if you prefer a space-separated form.
 
-| Flag        | Description                                   |
-| ----------- | --------------------------------------------- |
-| `--email`   | Email address for completion notification      |
-| `--webhook` | HTTPS webhook URL for completion notification  |
-| `--no-poll` | Upload files and exit without polling status   |
+## Tests
 
-## Output
-
-```
-Uploading 1 file(s)...
-
-Upload successful.
-  Batch ID:       6af30011-af82-4425-a1ad-406db4b0995c
-  Files uploaded:  1
-  Tracking URL:    https://connect.rediq.io/api/external/v1/job/6af30011-.../status
-
-Polling for status every 30s...
-
-  Status: queued     | Progress: 0% | Files: 0/1
-  Status: complete   | Progress: 100% | Files: 1/1
-
-Processing complete.
-
-  rent-roll.xlsx: https://external-api-rent-rolls.s3.amazonaws.com/...
-
-Batch downloads:
-  json: https://external-api-rent-rolls.s3.amazonaws.com/...
-  excel: https://external-api-rent-rolls.s3.amazonaws.com/...
+```bash
+npm test
 ```
 
-
+The tests use the built-in `node:test` runner and cover CLI parsing, notification and deal payload helpers, and upload `dealId` form data behavior.

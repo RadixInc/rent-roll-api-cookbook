@@ -41,7 +41,7 @@ body {
 
 /* Container */
 .container {
-    max-width: 520px;
+    max-width: 1080px;
     margin: 0 auto;
     padding: 2rem 1rem;
     min-height: 100vh;
@@ -87,11 +87,23 @@ h1 {
     font-size: 1.5rem;
     font-weight: 700;
     text-align: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.5rem;
     color: var(--text-primary);
 }
 
-/* Upload Card */
+.page-intro {
+    text-align: center;
+    color: var(--text-secondary);
+    max-width: 720px;
+    margin: 0 auto 1.5rem;
+}
+
+.section-stack {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.deals-card,
 .upload-card {
     background: var(--bg-card);
     border-radius: var(--radius);
@@ -99,6 +111,117 @@ h1 {
     padding: 1.5rem;
 }
 
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.card-header h2 {
+    font-size: 1.125rem;
+    margin-bottom: 0.25rem;
+}
+
+.section-subtitle,
+.muted-note {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.two-col-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.panel {
+    background: var(--bg-page);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+}
+
+.panel h3,
+.result-section h3 {
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+}
+
+.panel-heading {
+    margin-bottom: 0.75rem;
+}
+
+.field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.875rem;
+}
+
+.field-span-2 {
+    grid-column: span 2;
+}
+
+.inline-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.inline-actions input {
+    flex: 1;
+    min-width: 220px;
+}
+
+.small-btn,
+.secondary-btn,
+.danger-btn {
+    border: none;
+    border-radius: var(--radius-xs);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.small-btn {
+    background: var(--primary);
+    color: white;
+}
+
+.small-btn:hover {
+    background: var(--primary-dark);
+}
+
+.secondary-btn {
+    background: #e2e8f0;
+    color: var(--text-primary);
+}
+
+.secondary-btn:hover {
+    background: #cbd5e1;
+}
+
+.danger-btn {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--error);
+}
+
+.danger-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+.compact-btn {
+    width: auto;
+}
+
+.deal-picker {
+    min-height: 220px;
+}
+
+/* Upload Card */
 /* Drop Zone */
 .drop-zone {
     border: 2px dashed var(--border);
@@ -507,6 +630,10 @@ h1 {
     display: none;
 }
 
+.detail-form {
+    margin-top: 1rem;
+}
+
 /* Status Card */
 .status-card {
     background: var(--bg-page);
@@ -608,6 +735,15 @@ h1 {
     background: var(--error);
 }
 
+.status-badge.partial {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+}
+
+.status-badge.partial .status-dot {
+    background: var(--warning);
+}
+
 /* Progress */
 .progress-container {
     margin-bottom: 1rem;
@@ -663,6 +799,12 @@ h1 {
     color: var(--text-primary);
 }
 
+.detail-wrap {
+    max-width: 65%;
+    text-align: right;
+    white-space: normal;
+}
+
 .status-hint {
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -686,6 +828,34 @@ h1 {
 
 .upload-more-btn:hover {
     background: rgba(37, 99, 235, 0.05);
+}
+
+.result-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    text-align: left;
+    margin-bottom: 1.5rem;
+}
+
+.result-section {
+    background: var(--bg-page);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+}
+
+.result-list {
+    list-style: disc;
+    padding-left: 1.25rem;
+    color: var(--text-secondary);
+}
+
+.result-list li + li {
+    margin-top: 0.5rem;
+}
+
+.hidden {
+    display: none !important;
 }
 
 /* Error Card */
@@ -737,12 +907,23 @@ h1 {
         font-size: 1.25rem;
     }
 
+    .two-col-grid,
+    .field-grid,
+    .result-panel {
+        grid-template-columns: 1fr;
+    }
+
     .drop-zone {
         padding: 1.5rem 1rem;
     }
 
     .info-row .value.mono {
         font-size: 0.7rem;
+    }
+
+    .detail-wrap {
+        max-width: 100%;
+        text-align: left;
     }
 }
 

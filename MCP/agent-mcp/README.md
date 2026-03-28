@@ -1,6 +1,6 @@
 # Radix Rent Roll MCP Server
 
-An MCP (Model Context Protocol) server that connects Claude Desktop to the Radix/redIQ Rent Roll API. Upload rent roll files, monitor processing status, and retrieve cleaned results -- all through natural language.
+An MCP (Model Context Protocol) server that connects Claude Desktop to the Radix/redIQ Rent Roll API. Upload rent roll files, manage deals, monitor processing status, and retrieve cleaned results -- all through natural language.
 
 ## Key Design Principles
 
@@ -57,9 +57,9 @@ installed dependencies.
 ```json
 {
   "mcpServers": {
-    "radix-rent-roll-mcp": {
-      "command": "C:\\Users\\YourName\\path\\to\\radix-rent-roll-mcp\\.venv\\Scripts\\python.exe",
-      "args": ["C:\\Users\\YourName\\path\\to\\radix-rent-roll-mcp\\server.py"],
+    "radix-rent-roll-agent": {
+      "command": "C:\\Users\\YourName\\path\\to\\rent-roll-api-cookbook-1\\MCP\\agent-mcp\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\YourName\\path\\to\\rent-roll-api-cookbook-1\\MCP\\agent-mcp\\server.py"],
       "env": {
         "RADIX_API_KEY": "your-api-key-here",
         "RADIX_API_URL": "https://connect.rediq.io",
@@ -78,9 +78,9 @@ installed dependencies.
 ```json
 {
   "mcpServers": {
-    "radix-rent-roll-mcp": {
-      "command": "/Users/yourname/path/to/radix-rent-roll-mcp/.venv/bin/python",
-      "args": ["/Users/yourname/path/to/radix-rent-roll-mcp/server.py"],
+    "radix-rent-roll-agent": {
+      "command": "/Users/yourname/path/to/rent-roll-api-cookbook-1/MCP/agent-mcp/.venv/bin/python",
+      "args": ["/Users/yourname/path/to/rent-roll-api-cookbook-1/MCP/agent-mcp/server.py"],
       "env": {
         "RADIX_API_KEY": "your-api-key-here",
         "RADIX_API_URL": "https://connect.rediq.io",
@@ -207,6 +207,10 @@ Once configured, you can talk to Claude Desktop naturally:
 > "Process the rent rolls in my documents folder, extract the cleaned CSVs,
 > and summarize the unit count and average rent"
 
+## API Update Note
+
+This MCP now exposes direct deal tools plus upload and workflow support for `deal_id`. Create or look up the target deal first, then pass its `counterId` as upload `deal_id`. Only one `dealId` is allowed per upload request, so mixed folders should be split into separate uploads by target deal.
+
 ---
 
 ## Available Tools
@@ -219,8 +223,9 @@ call.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `file_paths` | list[str] | *(required)* | Absolute paths to rent roll files |
-| `notification_email` | str | `""` | Email for notifications (or set `RADIX_NOTIFICATION_EMAIL`) |
+| `notification_email` | str | `""` | Optional email for notifications (or set `RADIX_NOTIFICATION_EMAIL`) |
 | `webhook_url` | str \| null | `null` | Optional webhook URL |
+| `deal_id` | int \| null | `null` | Optional deal counterId for the entire batch |
 | `poll_interval_seconds` | number | `7.5` | Seconds between status polls |
 | `timeout_seconds` | number | `900` | Max wait before timeout |
 | `result_mode` | `"urls"` \| `"manifest"` \| `"extract"` | `"urls"` | What to return |
@@ -235,6 +240,8 @@ call.
 **Response fields (always present):**
 `success`, `batch_id`, `status`, `zip_download_url`, `zip_presigned_expires_at`,
 `output_dir_used`, `host_os`, `warnings`
+
+Provide at least one notification target using `notification_email`, `webhook_url`, or `RADIX_NOTIFICATION_EMAIL`.
 
 **Additional fields by result_mode:**
 
@@ -251,8 +258,69 @@ Upload rent roll files for processing. Returns a `batchId` for status tracking.
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `file_paths` | list[str] | *(required)* | Absolute paths to rent roll files |
-| `notification_email` | str | *(required)* | Email for completion notifications |
+| `notification_email` | str \| null | `null` | Optional email notification target |
 | `webhook_url` | str \| null | `null` | Optional webhook URL |
+| `deal_id` | int \| null | `null` | Optional deal counterId for the entire batch |
+| `api_key_override` | str \| null | `null` | Override the `RADIX_API_KEY` env var |
+
+Provide at least one of `notification_email` or `webhook_url`.
+
+### create_deal
+
+Create a deal and return its `counterId`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `deal_name` | str | *(required)* | Deal name |
+| `address` | str \| null | `null` | Property address |
+| `city` | str \| null | `null` | Property city |
+| `state` | str \| null | `null` | Property state |
+| `zip` | str \| null | `null` | Property zip code |
+| `unit_count` | int \| null | `null` | Property unit count |
+| `api_key_override` | str \| null | `null` | Override the `RADIX_API_KEY` env var |
+
+### list_deals
+
+List deals for the authenticated account.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `page` | int | `1` | Page number |
+| `limit` | int | `20` | Page size |
+| `search` | str \| null | `null` | Optional deal name search |
+| `api_key_override` | str \| null | `null` | Override the `RADIX_API_KEY` env var |
+
+### get_deal
+
+Retrieve one deal by its `counterId`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `counter_id` | int | *(required)* | Deal counterId |
+| `api_key_override` | str \| null | `null` | Override the `RADIX_API_KEY` env var |
+
+### update_deal
+
+Update one or more fields on an existing deal.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `counter_id` | int | *(required)* | Deal counterId |
+| `deal_name` | str \| null | `null` | Updated deal name |
+| `address` | str \| null | `null` | Updated property address |
+| `city` | str \| null | `null` | Updated property city |
+| `state` | str \| null | `null` | Updated property state |
+| `zip` | str \| null | `null` | Updated property zip code |
+| `unit_count` | int \| null | `null` | Updated unit count |
+| `api_key_override` | str \| null | `null` | Override the `RADIX_API_KEY` env var |
+
+### delete_deal
+
+Soft-delete a deal by its `counterId`.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `counter_id` | int | *(required)* | Deal counterId |
 | `api_key_override` | str \| null | `null` | Override the `RADIX_API_KEY` env var |
 
 ### check_batch_status

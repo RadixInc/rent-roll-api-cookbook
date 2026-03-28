@@ -148,12 +148,98 @@ def _get_content_type(extension: str) -> str:
     return MIME_TYPES.get(extension.lower(), "application/octet-stream")
 
 
+def _build_notification_json(
+    notification_email: Optional[str],
+    webhook_url: Optional[str],
+) -> str | dict[str, Any]:
+    """Build the notificationMethod JSON string required by the upload API."""
+    notifications: list[dict[str, str]] = []
+
+    email = (notification_email or "").strip()
+    webhook = (webhook_url or "").strip()
+
+    if email:
+        notifications.append({"type": "email", "entry": email})
+    if webhook:
+        notifications.append({"type": "webhook", "entry": webhook})
+
+    if not notifications:
+        return {
+            "success": False,
+            "error": "Missing notification target",
+            "details": (
+                "Provide notification_email, webhook_url, or both. "
+                "The upload endpoint requires at least one notification method."
+            ),
+        }
+
+    return json.dumps(notifications)
+
+
+def _coerce_optional_deal_id(
+    deal_id: Optional[int],
+) -> int | None | dict[str, Any]:
+    """Validate and normalize an optional deal ID."""
+    if deal_id is None:
+        return None
+    if isinstance(deal_id, bool):
+        return {
+            "success": False,
+            "error": "Invalid deal_id",
+            "details": "deal_id must be an integer counterId from the Deals API.",
+        }
+
+    try:
+        value = int(deal_id)
+    except (TypeError, ValueError):
+        return {
+            "success": False,
+            "error": "Invalid deal_id",
+            "details": "deal_id must be an integer counterId from the Deals API.",
+        }
+
+    if value <= 0:
+        return {
+            "success": False,
+            "error": "Invalid deal_id",
+            "details": "deal_id must be a positive integer counterId.",
+        }
+
+    return value
+
+
 def _unwrap_api_payload(body: dict[str, Any]) -> dict[str, Any]:
     """Return the API payload dict for either {data:{...}} or flat shapes."""
     data = body.get("data")
     if isinstance(data, dict):
         return data
     return body
+
+
+def _normalize_deal(raw: Any) -> dict[str, Any]:
+    """Normalize a deal payload for MCP consumers."""
+    if not isinstance(raw, dict):
+        return {}
+
+    result = {
+        "counterId": raw.get("counterId"),
+        "dealName": raw.get("dealName"),
+        "address": raw.get("address"),
+        "city": raw.get("city"),
+        "state": raw.get("state"),
+        "zip": raw.get("zip"),
+        "unitCount": raw.get("unitCount"),
+        "createdOn": raw.get("createdOn"),
+        "lastModifiedOn": raw.get("lastModifiedOn"),
+    }
+
+    result["counter_id"] = result["counterId"]
+    result["deal_name"] = result["dealName"]
+    result["unit_count"] = result["unitCount"]
+    result["created_on"] = result["createdOn"]
+    result["last_modified_on"] = result["lastModifiedOn"]
+
+    return result
 
 
 def _normalize_status(value: Any) -> str:
@@ -421,8 +507,9 @@ def _extract_filename(
 @mcp.tool()
 async def upload_rent_rolls(
     file_paths: list[str],
-    notification_email: str,
+    notification_email: Optional[str] = None,
     webhook_url: Optional[str] = None,
+    deal_id: Optional[int] = None,
     api_key_override: Optional[str] = None,
 ) -> dict[str, Any]:
     """Upload rent roll files to the Radix/RedIQ API for processing.
@@ -433,8 +520,9 @@ async def upload_rent_rolls(
 
     Args:
         file_paths: Absolute paths to rent roll files on your local filesystem.
-        notification_email: Email address to receive completion notifications.
+        notification_email: Optional email address for completion notifications.
         webhook_url: Optional webhook URL for completion callbacks.
+        deal_id: Optional deal counterId to attach the entire batch to one deal.
         api_key_override: Optional API key (or set RADIX_API_KEY env var).
     """
     # --- Resolve API key ---
@@ -497,12 +585,13 @@ async def upload_rent_rolls(
         resolved_paths.append(p)
 
     # --- Build notification method JSON ---
-    notifications: list[dict[str, str]] = [
-        {"type": "email", "entry": notification_email}
-    ]
-    if webhook_url:
-        notifications.append({"type": "webhook", "entry": webhook_url})
-    notification_json = json.dumps(notifications)
+    notification_json = _build_notification_json(notification_email, webhook_url)
+    if isinstance(notification_json, dict):
+        return notification_json
+
+    normalized_deal_id = _coerce_optional_deal_id(deal_id)
+    if isinstance(normalized_deal_id, dict):
+        return normalized_deal_id
 
     # --- Upload via multipart form ---
     file_handles = []
@@ -515,11 +604,15 @@ async def upload_rent_rolls(
             files_for_upload.append(("files", (p.name, fh, mime)))
 
         async with httpx.AsyncClient(timeout=120.0) as client:
+            form_data: dict[str, Any] = {"notificationMethod": notification_json}
+            if normalized_deal_id is not None:
+                form_data["dealId"] = str(normalized_deal_id)
+
             resp = await client.post(
                 f"{base_url}/api/external/v1/upload",
                 headers={"Authorization": f"Bearer {key}"},
                 files=files_for_upload,
-                data={"notificationMethod": notification_json},
+                data=form_data,
             )
     except httpx.TimeoutException:
         return {
@@ -556,7 +649,7 @@ async def upload_rent_rolls(
 
     data = body.get("data", {})
 
-    return {
+    result = {
         "success": True,
         "batchId": data.get("batchId"),
         "status": data.get("status", "queued"),
@@ -570,9 +663,383 @@ async def upload_rent_rolls(
         ),
     }
 
+    if normalized_deal_id is not None:
+        result["dealId"] = normalized_deal_id
+        result["deal_id"] = normalized_deal_id
+
+    return result
+
 
 # ---------------------------------------------------------------------------
-# Tool 2: check_batch_status
+# Deal Tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def create_deal(
+    deal_name: str,
+    address: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    zip: Optional[str] = None,
+    unit_count: Optional[int] = None,
+    api_key_override: Optional[str] = None,
+) -> dict[str, Any]:
+    """Create a deal and return its counterId for later upload deal_id usage."""
+    key = _get_api_key(api_key_override=api_key_override)
+    if isinstance(key, dict):
+        return key
+
+    name = deal_name.strip()
+    if not name:
+        return {
+            "success": False,
+            "error": "Missing deal_name",
+            "details": "deal_name is required to create a deal.",
+        }
+
+    payload: dict[str, Any] = {"dealName": name}
+    if address is not None:
+        payload["address"] = address
+    if city is not None:
+        payload["city"] = city
+    if state is not None:
+        payload["state"] = state
+    if zip is not None:
+        payload["zip"] = zip
+    if unit_count is not None:
+        payload["unitCount"] = unit_count
+
+    base_url = _get_base_url()
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{base_url}/api/external/v1/deals",
+                headers={"Authorization": f"Bearer {key}"},
+                json=payload,
+            )
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "error": "Request timed out",
+            "details": "The create_deal request timed out. Try again shortly.",
+        }
+    except httpx.RequestError as exc:
+        return {
+            "success": False,
+            "error": "Network error",
+            "details": f"Could not connect to {base_url}: {exc}",
+        }
+
+    if resp.status_code not in (200, 201):
+        return {
+            "success": False,
+            "error": f"API error (HTTP {resp.status_code})",
+            "details": resp.text[:1000],
+        }
+
+    try:
+        body = resp.json()
+    except Exception:
+        return {
+            "success": False,
+            "error": "Invalid API response",
+            "details": "Could not parse JSON from API response.",
+        }
+
+    deal = _normalize_deal(_unwrap_api_payload(body))
+    return {
+        "success": True,
+        "requestId": body.get("requestId"),
+        "deal": deal,
+        **deal,
+    }
+
+
+@mcp.tool()
+async def list_deals(
+    page: int = 1,
+    limit: int = 20,
+    search: Optional[str] = None,
+    api_key_override: Optional[str] = None,
+) -> dict[str, Any]:
+    """List deals for the authenticated account."""
+    key = _get_api_key(api_key_override=api_key_override)
+    if isinstance(key, dict):
+        return key
+
+    base_url = _get_base_url()
+    params: dict[str, Any] = {"page": page, "limit": limit}
+    if search:
+        params["search"] = search
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(
+                f"{base_url}/api/external/v1/deals",
+                headers={"Authorization": f"Bearer {key}"},
+                params=params,
+            )
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "error": "Request timed out",
+            "details": "The list_deals request timed out. Try again shortly.",
+        }
+    except httpx.RequestError as exc:
+        return {
+            "success": False,
+            "error": "Network error",
+            "details": f"Could not connect to {base_url}: {exc}",
+        }
+
+    if resp.status_code != 200:
+        return {
+            "success": False,
+            "error": f"API error (HTTP {resp.status_code})",
+            "details": resp.text[:1000],
+        }
+
+    try:
+        body = resp.json()
+    except Exception:
+        return {
+            "success": False,
+            "error": "Invalid API response",
+            "details": "Could not parse JSON from API response.",
+        }
+
+    data = _unwrap_api_payload(body)
+    deals_raw = data.get("deals", [])
+    deals = [_normalize_deal(item) for item in deals_raw if isinstance(item, dict)]
+
+    return {
+        "success": True,
+        "requestId": body.get("requestId"),
+        "deals": deals,
+        "total": data.get("total", len(deals)),
+        "page": data.get("page", page),
+        "limit": data.get("limit", limit),
+    }
+
+
+@mcp.tool()
+async def get_deal(
+    counter_id: int,
+    api_key_override: Optional[str] = None,
+) -> dict[str, Any]:
+    """Retrieve one deal by its counterId."""
+    key = _get_api_key(api_key_override=api_key_override)
+    if isinstance(key, dict):
+        return key
+
+    base_url = _get_base_url()
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.get(
+                f"{base_url}/api/external/v1/deals/{counter_id}",
+                headers={"Authorization": f"Bearer {key}"},
+            )
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "error": "Request timed out",
+            "details": "The get_deal request timed out. Try again shortly.",
+        }
+    except httpx.RequestError as exc:
+        return {
+            "success": False,
+            "error": "Network error",
+            "details": f"Could not connect to {base_url}: {exc}",
+        }
+
+    if resp.status_code == 404:
+        return {
+            "success": False,
+            "error": "Deal not found",
+            "details": f"No deal found with counterId: {counter_id}",
+        }
+
+    if resp.status_code != 200:
+        return {
+            "success": False,
+            "error": f"API error (HTTP {resp.status_code})",
+            "details": resp.text[:1000],
+        }
+
+    try:
+        body = resp.json()
+    except Exception:
+        return {
+            "success": False,
+            "error": "Invalid API response",
+            "details": "Could not parse JSON from API response.",
+        }
+
+    deal = _normalize_deal(_unwrap_api_payload(body))
+    return {
+        "success": True,
+        "requestId": body.get("requestId"),
+        "deal": deal,
+        **deal,
+    }
+
+
+@mcp.tool()
+async def update_deal(
+    counter_id: int,
+    deal_name: Optional[str] = None,
+    address: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    zip: Optional[str] = None,
+    unit_count: Optional[int] = None,
+    api_key_override: Optional[str] = None,
+) -> dict[str, Any]:
+    """Update one or more fields on an existing deal."""
+    key = _get_api_key(api_key_override=api_key_override)
+    if isinstance(key, dict):
+        return key
+
+    payload: dict[str, Any] = {}
+    if deal_name is not None:
+        payload["dealName"] = deal_name
+    if address is not None:
+        payload["address"] = address
+    if city is not None:
+        payload["city"] = city
+    if state is not None:
+        payload["state"] = state
+    if zip is not None:
+        payload["zip"] = zip
+    if unit_count is not None:
+        payload["unitCount"] = unit_count
+
+    if not payload:
+        return {
+            "success": False,
+            "error": "No update fields provided",
+            "details": "Provide at least one deal field to update.",
+        }
+
+    base_url = _get_base_url()
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.put(
+                f"{base_url}/api/external/v1/deals/{counter_id}",
+                headers={"Authorization": f"Bearer {key}"},
+                json=payload,
+            )
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "error": "Request timed out",
+            "details": "The update_deal request timed out. Try again shortly.",
+        }
+    except httpx.RequestError as exc:
+        return {
+            "success": False,
+            "error": "Network error",
+            "details": f"Could not connect to {base_url}: {exc}",
+        }
+
+    if resp.status_code == 404:
+        return {
+            "success": False,
+            "error": "Deal not found",
+            "details": f"No deal found with counterId: {counter_id}",
+        }
+
+    if resp.status_code != 200:
+        return {
+            "success": False,
+            "error": f"API error (HTTP {resp.status_code})",
+            "details": resp.text[:1000],
+        }
+
+    try:
+        body = resp.json()
+    except Exception:
+        return {
+            "success": False,
+            "error": "Invalid API response",
+            "details": "Could not parse JSON from API response.",
+        }
+
+    deal = _normalize_deal(_unwrap_api_payload(body))
+    return {
+        "success": True,
+        "requestId": body.get("requestId"),
+        "deal": deal,
+        **deal,
+    }
+
+
+@mcp.tool()
+async def delete_deal(
+    counter_id: int,
+    api_key_override: Optional[str] = None,
+) -> dict[str, Any]:
+    """Soft-delete a deal by its counterId."""
+    key = _get_api_key(api_key_override=api_key_override)
+    if isinstance(key, dict):
+        return key
+
+    base_url = _get_base_url()
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.delete(
+                f"{base_url}/api/external/v1/deals/{counter_id}",
+                headers={"Authorization": f"Bearer {key}"},
+            )
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "error": "Request timed out",
+            "details": "The delete_deal request timed out. Try again shortly.",
+        }
+    except httpx.RequestError as exc:
+        return {
+            "success": False,
+            "error": "Network error",
+            "details": f"Could not connect to {base_url}: {exc}",
+        }
+
+    if resp.status_code == 404:
+        return {
+            "success": False,
+            "error": "Deal not found",
+            "details": f"No deal found with counterId: {counter_id}",
+        }
+
+    if resp.status_code != 200:
+        return {
+            "success": False,
+            "error": f"API error (HTTP {resp.status_code})",
+            "details": resp.text[:1000],
+        }
+
+    try:
+        body = resp.json()
+    except Exception:
+        return {
+            "success": False,
+            "error": "Invalid API response",
+            "details": "Could not parse JSON from API response.",
+        }
+
+    data = _unwrap_api_payload(body)
+    return {
+        "success": True,
+        "requestId": body.get("requestId"),
+        "counterId": counter_id,
+        "counter_id": counter_id,
+        "message": data.get("message", f"Deal {counter_id} deleted successfully"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool: check_batch_status
 # ---------------------------------------------------------------------------
 
 
@@ -1176,6 +1643,7 @@ async def process_rent_roll_workflow(
     file_paths: list[str],
     notification_email: str = "",
     webhook_url: Optional[str] = None,
+    deal_id: Optional[int] = None,
     poll_interval_seconds: float = 7.5,
     timeout_seconds: float = 900.0,
     result_mode: Literal["urls", "manifest", "extract"] = "urls",
@@ -1209,17 +1677,21 @@ async def process_rent_roll_workflow(
         as inline_csv so the model can answer questions without filesystem access.
     """
     email = (notification_email or "").strip() or os.environ.get("RADIX_NOTIFICATION_EMAIL", "").strip()
-    if not email:
+    if not email and not (webhook_url or "").strip():
         return {
             "success": False,
-            "error": "Missing notification_email",
-            "details": "Provide notification_email or set RADIX_NOTIFICATION_EMAIL.",
+            "error": "Missing notification target",
+            "details": (
+                "Provide notification_email, webhook_url, or set "
+                "RADIX_NOTIFICATION_EMAIL."
+            ),
         }
 
     upload = await upload_rent_rolls(
         file_paths=file_paths,
-        notification_email=email,
+        notification_email=email or None,
         webhook_url=webhook_url,
+        deal_id=deal_id,
         api_key_override=api_key_override,
     )
     if not upload.get("success"):
@@ -1231,6 +1703,7 @@ async def process_rent_roll_workflow(
             "success": False,
             "error": "Upload did not return batchId",
         }
+    uploaded_deal_id = upload.get("dealId")
 
     deadline = time.monotonic() + float(timeout_seconds)
     last_status: dict[str, Any] = {}
@@ -1302,6 +1775,9 @@ async def process_rent_roll_workflow(
     result["batchId"] = batch_id
     result["zipDownloadUrl"] = zip_download_url
     result["zipPresignedExpiresAt"] = zip_presigned_expires_at
+    if uploaded_deal_id is not None:
+        result["dealId"] = uploaded_deal_id
+        result["deal_id"] = uploaded_deal_id
 
     if include_summary and last_status.get("summary") is not None:
         result["summary"] = last_status.get("summary")
