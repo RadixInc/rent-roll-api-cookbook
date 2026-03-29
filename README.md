@@ -74,8 +74,22 @@ API keys are available in the redIQ platform under **External API** settings. Ke
 
 Set it as an environment variable to use with the examples in this repo:
 
+macOS/Linux (bash/zsh):
+
 ```bash
-export RADIX_API_KEY="riq_live_your_api_key_here"
+export RADIX_API_KEY="riq_live_your_api_key_here"  
+```
+
+PowerShell (Windows):
+
+```powershell
+$env:RADIX_API_KEY = "riq_live_your_api_key_here"
+```
+
+Command Prompt (Windows):
+
+```cmd
+set RADIX_API_KEY=riq_live_your_api_key_here
 ```
 
 ---
