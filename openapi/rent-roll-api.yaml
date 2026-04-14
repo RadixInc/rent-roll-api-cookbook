@@ -1,8 +1,8 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
-  title: RedIQ External API
+  title: RedIQ External API - Deals
   version: 1.0.0
-  description: Public API for programmatic access to RedIQ rent roll processing.
+  description: Public API for creating, listing, getting, updating, and deleting deals via the RedIQ External API
   contact:
     name: RedIQ Support
     email: support@rediq.io
@@ -14,70 +14,185 @@ tags:
     description: Upload rent roll files and track processing status
   - name: Deals
     description: Create, read, update, and delete deals for linking rent rolls
-  - name: API Key Management
-    description: Admin endpoints for managing API keys (requires JWT authentication)
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: Authorization
-      description: "API Key: `Bearer <api-key>` or `ApiKey <api-key>` or `<api-key>`"
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: JWT token for admin endpoints
+      description: "API Key authentication. Accepts: `Bearer <api-key>`, `ApiKey <api-key>`, or raw `<api-key>`"
   schemas:
-    DealResponse:
+    ExternalDeal:
       type: object
       properties:
         counterId:
           type: integer
-          description: Sequential deal number within the account. Use this as dealId when
-            uploading rent rolls.
-          example: 42
+          description: Sequential deal number within the account. Use this as dealId when uploading rent rolls.
+          example: 7045
         dealName:
           type: string
+          nullable: true
           description: Name of the deal
           example: Sunset Plaza Apartments
         address:
           type: string
           nullable: true
-          example: 123 Main St
+          description: Property address
+          example: 123 Main Street
         city:
           type: string
           nullable: true
+          description: Property city
           example: Austin
         state:
           type: string
           nullable: true
+          description: Property state
           example: TX
         zip:
           type: string
           nullable: true
+          description: Property zip code
           example: "78701"
         unitCount:
           type: integer
           nullable: true
+          description: Number of units in the property
           example: 128
         createdOn:
           type: string
           format: date-time
           nullable: true
-          description: Deal creation timestamp (UTC)
+          description: Deal creation timestamp (ISO 8601 UTC)
+          example: "2026-04-08T14:15:08.540Z"
         lastModifiedOn:
           type: string
           format: date-time
           nullable: true
-          description: Last modification timestamp (UTC)
+          description: Last modification timestamp (ISO 8601 UTC)
+          example: "2026-04-08T14:29:48.283Z"
+    CreateDealRequest:
+      type: object
+      required:
+        - dealName
+      properties:
+        dealName:
+          type: string
+          minLength: 1
+          maxLength: 8000
+          description: Name of the deal (required)
+          example: Sunset Plaza Apartments
+        address:
+          type: string
+          maxLength: 8000
+          nullable: true
+          description: Property address
+          example: 123 Main Street
+        city:
+          type: string
+          maxLength: 8000
+          nullable: true
+          description: Property city
+          example: Austin
+        state:
+          type: string
+          maxLength: 8000
+          nullable: true
+          description: Property state (2-letter code)
+          example: TX
+        zip:
+          type: string
+          maxLength: 8000
+          nullable: true
+          description: Property zip code
+          example: "78701"
+        unitCount:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Number of units in the property
+          example: 128
+    UpdateDealRequest:
+      type: object
+      description: All fields are optional. Only provided fields will be updated.
+      properties:
+        dealName:
+          type: string
+          minLength: 1
+          maxLength: 8000
+          description: Name of the deal
+          example: Sunset Plaza Apartments (Updated)
+        address:
+          type: string
+          maxLength: 8000
+          nullable: true
+          description: Property address
+          example: 456 Oak Avenue
+        city:
+          type: string
+          maxLength: 8000
+          nullable: true
+          description: Property city
+          example: Denver
+        state:
+          type: string
+          maxLength: 8000
+          nullable: true
+          description: Property state
+          example: CO
+        zip:
+          type: string
+          maxLength: 8000
+          nullable: true
+          description: Property zip code
+          example: "80201"
+        unitCount:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Number of units in the property
+          example: 200
+    ErrorResponse:
+      type: object
+      properties:
+        statuscode:
+          type: integer
+          example: 400
+        requestId:
+          type: string
+          example: generated-1775657683598-hdj8qngt
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+              example: Validation failed
+            code:
+              type: string
+              description: Machine-readable error code (present on auth errors)
+              example: INVALID_KEY
+            details:
+              type: array
+              description: Validation error details (present on 400 errors)
+              items:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  message:
+                    type: string
+security:
+  - ApiKeyAuth: []
 paths:
   /api/external/v1/upload:
     post:
       summary: Upload rent roll files
-      description: Upload rent roll files with notification preferences. Accepts up to
-        20 files in Excel, CSV, or ODS format. Files are queued for asynchronous
-        processing.
+      description: |-
+        Upload rent roll files with notification preferences. Accepts up to 20 files in Excel, CSV, or ODS format. Files are queued for asynchronous processing via SQS.
+
+        **Allowed file types:** `.xlsx`, `.xls`, `.xlsm`, `.csv`, `.ods`
+        **Max file size:** 2 MB per file
+        **Max files:** 20 per request
       operationId: uploadRentRolls
       tags:
         - Upload & Processing
@@ -95,8 +210,7 @@ paths:
               properties:
                 files:
                   type: array
-                  description: Rent roll files (.xlsx, .xls, .xlsm, .csv, .ods). Max 2MB/file, up
-                    to 20 files.
+                  description: Rent roll files (.xlsx, .xls, .xlsm, .csv, .ods). Max 2 MB per file, up to 20 files.
                   minItems: 1
                   maxItems: 20
                   items:
@@ -104,14 +218,13 @@ paths:
                     format: binary
                 notificationMethod:
                   type: string
-                  description: 'JSON array of notification methods. Example:
-                    [{"type":"email","entry":"user@example.com"},{"type":"webhook","entry":"https://api.example.com/webhook"}]'
+                  description: >-
+                    JSON-encoded array of notification methods. Each entry must have `type` ("email" or "webhook") and `entry` (email address or HTTPS webhook URL).
                   example: '[{"type":"email","entry":"user@example.com"}]'
                 dealId:
                   type: integer
-                  description: Optional. The counterId of an existing deal to link the uploaded
-                    rent rolls to. Use the Deals API to create a deal first,
-                    then pass its counterId here.
+                  description: >-
+                    Optional. The `counterId` of an existing deal to link the uploaded rent rolls to. Use the Deals API to create a deal first, then pass its `counterId` here.
                   example: 42
       responses:
         "202":
@@ -126,7 +239,7 @@ paths:
                     example: 202
                   requestId:
                     type: string
-                    description: Unique request identifier (ULID format)
+                    description: Unique request identifier
                   data:
                     type: object
                     properties:
@@ -138,7 +251,7 @@ paths:
                         type: string
                         enum:
                           - queued
-                        description: Current status of the batch
+                        description: Initial batch status
                       filesUploaded:
                         type: integer
                         description: Number of files successfully uploaded
@@ -150,34 +263,124 @@ paths:
                         description: Estimated total units across all files
                       message:
                         type: string
-                        description: Human-readable status message
+                        example: Files uploaded successfully. Processing started.
                       estimatedCompletionMinutes:
                         type: number
                         description: Estimated processing time in minutes
                       trackingUrl:
                         type: string
                         format: uri
-                        description: URL to track batch status
+                        description: URL to track batch status via GET
                       createdAt:
                         type: string
                         format: date-time
-                        description: Batch creation timestamp
+                        description: Batch creation timestamp (ISO 8601)
+              example:
+                statuscode: 202
+                requestId: generated-1775657684584-kdajdeqg3
+                data:
+                  batchId: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                  status: queued
+                  filesUploaded: 2
+                  filesQueued: 2
+                  estimatedTotalUnits: 250
+                  message: Files uploaded successfully. Processing started.
+                  estimatedCompletionMinutes: 3.5
+                  trackingUrl: https://connect.dev.rediq.io/api/external/v1/job/a1b2c3d4-e5f6-7890-abcd-ef1234567890/status
+                  createdAt: "2026-04-08T14:15:08.540Z"
         "400":
-          description: Bad request - invalid files, notification method, or validation
-            errors
+          description: Bad request — invalid files, missing notification method, or validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                noFiles:
+                  summary: No files provided
+                  value:
+                    statuscode: 400
+                    requestId: generated-1775657683598-hdj8qngt
+                    error:
+                      message: At least one file is required
+                invalidNotification:
+                  summary: Invalid notification format
+                  value:
+                    statuscode: 400
+                    requestId: generated-1775657683598-hdj8qngt
+                    error:
+                      message: Invalid notificationMethod format. Must be valid JSON.
+                invalidFileType:
+                  summary: Invalid file type
+                  value:
+                    statuscode: 400
+                    requestId: generated-1775657683598-hdj8qngt
+                    error: "Invalid file type. Allowed types: .xlsx, .xls, .xlsm, .csv, .ods"
         "401":
-          description: Authentication failed - missing, invalid, deleted, or revoked API key
+          description: Authentication failed — missing, invalid, deleted, or revoked API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                noKey:
+                  summary: No API key provided
+                  value:
+                    statusCode: 401
+                    error:
+                      message: Authentication required. Please provide a valid API key in the Authorization header.
+                      code: NO_API_KEY
+                invalidKey:
+                  summary: Invalid API key
+                  value:
+                    statusCode: 401
+                    error:
+                      message: Invalid API key
+                      code: INVALID_KEY
+                revokedKey:
+                  summary: Revoked API key
+                  value:
+                    statusCode: 401
+                    error:
+                      message: API key has been revoked
+                      code: KEY_REVOKED
         "403":
-          description: Forbidden - API access not enabled or insufficient credits
+          description: Forbidden — insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 403
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Insufficient credits to process this request
         "429":
-          description: Rate limit exceeded
+          description: Rate limit exceeded (per-IP or per-key) or account API usage limits exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statusCode: 429
+                error:
+                  message: Account has exceeded API usage limits
+                  code: LIMIT_EXCEEDED
         "500":
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 500
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Failed to process file upload
   /api/external/v1/job/{batchId}/status:
     get:
       summary: Get batch job status
-      description: Retrieve the current status of a batch upload job, including status
-        of individual files and download links when complete.
+      description: >-
+        Retrieve the current status of a batch upload job, including per-file status and download links when processing is complete. Only the API key that created the batch can query its status.
       operationId: getJobStatus
       tags:
         - Upload & Processing
@@ -187,7 +390,7 @@ paths:
         - name: batchId
           in: path
           required: true
-          description: Batch ID returned from upload endpoint
+          description: Batch ID (UUID) returned from the upload endpoint
           schema:
             type: string
             format: uuid
@@ -204,14 +407,12 @@ paths:
                     example: 200
                   requestId:
                     type: string
-                    description: Unique request identifier (ULID format)
                   data:
                     type: object
                     properties:
                       batchId:
                         type: string
                         format: uuid
-                        description: Unique batch identifier
                       status:
                         type: string
                         enum:
@@ -220,7 +421,8 @@ paths:
                           - complete
                           - failed
                           - partially complete
-                        description: Current batch status
+                        description: >-
+                          Current batch status. Mapped from DB: Pending→queued, Processing→in progress, Completed→complete, Failed→failed, PartiallyCompleted→partially complete
                       fileCount:
                         type: integer
                         description: Total files in batch
@@ -237,11 +439,10 @@ paths:
                         type: number
                         minimum: 0
                         maximum: 100
-                        description: Processing progress percentage
+                        description: Processing progress percentage (based on completed file count)
                       estimatedTotalUnits:
                         type: integer
                         nullable: true
-                        description: Estimated total units across all files
                       actualTotalUnits:
                         type: integer
                         nullable: true
@@ -249,32 +450,13 @@ paths:
                       errorMessage:
                         type: string
                         nullable: true
-                        description: Error message if batch failed or partially completed
+                        description: Error details if batch failed or partially completed
                       createdAt:
                         type: string
                         format: date-time
-                        description: Batch creation timestamp
                       updatedAt:
                         type: string
                         format: date-time
-                        description: Last update timestamp
-                      batchDownloads:
-                        type: array
-                        description: Batch download links (available when complete)
-                        items:
-                          type: object
-                          properties:
-                            type:
-                              type: string
-                              description: Download type (e.g., zip, excel, json)
-                            downloadUrl:
-                              type: string
-                              format: uri
-                              description: Pre-signed download URL
-                            expiresAt:
-                              type: string
-                              format: date-time
-                              description: URL expiration timestamp
                       files:
                         type: array
                         description: Individual file status details
@@ -284,10 +466,9 @@ paths:
                             fileId:
                               type: string
                               format: uuid
-                              description: Unique file identifier
                             fileName:
                               type: string
-                              description: Original file name
+                              description: Original uploaded file name
                             status:
                               type: string
                               enum:
@@ -300,25 +481,64 @@ paths:
                               type: string
                               format: uri
                               nullable: true
-                              description: Download URL when complete
+                              description: Pre-signed S3 download URL (available when complete)
                             errorMessage:
                               type: string
                               nullable: true
-                              description: Error message if failed
+                              description: Set to 'File processing failed' when status is failed
                             createdAt:
                               type: string
                               format: date-time
-                              description: File upload timestamp
                             updatedAt:
                               type: string
                               format: date-time
-                              description: Last update timestamp
+                      batchDownloads:
+                        type: array
+                        nullable: true
+                        description: >-
+                          Batch-level download links (zip archives). Only present when zip archives have been generated after processing.
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                              description: Download type identifier
+                            downloadUrl:
+                              type: string
+                              format: uri
+                              description: Pre-signed download URL
+                            expiresAt:
+                              type: string
+                              format: date-time
+                              description: URL expiration timestamp (if pre-signed)
         "401":
-          description: Authentication failed - missing, invalid, deleted, or revoked API key
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Access denied - job belongs to another account
+          description: Access denied — batch belongs to a different API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 403
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: You do not have permission to access this job
         "404":
-          description: Job not found
+          description: Job not found — invalid batchId or no matching process
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 404
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Job not found
         "429":
           description: Rate limit exceeded
         "500":
@@ -326,9 +546,10 @@ paths:
   /api/external/v1/deals:
     post:
       summary: Create a new deal
-      description: Create a deal to group and organize rent roll uploads. After
-        creating a deal, use the returned counterId as the dealId parameter when
-        uploading rent rolls. Requires an API key with an assigned user.
+      description: |-
+        Create a deal to group and organize rent roll uploads. After creating a deal, use the returned `counterId` as the `dealId` parameter when uploading rent rolls.
+
+        **Requires:** API key with an assigned user (admin must assign a user to the key).
       operationId: createDeal
       tags:
         - Deals
@@ -339,34 +560,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - dealName
-              properties:
-                dealName:
-                  type: string
-                  description: Name of the deal
-                  example: Sunset Plaza Apartments
-                address:
-                  type: string
-                  description: Property address
-                  example: 123 Main St
-                city:
-                  type: string
-                  description: Property city
-                  example: Austin
-                state:
-                  type: string
-                  description: Property state
-                  example: TX
-                zip:
-                  type: string
-                  description: Property zip code
-                  example: "78701"
-                unitCount:
-                  type: integer
-                  description: Number of units in the property
-                  example: 128
+              $ref: "#/components/schemas/CreateDealRequest"
       responses:
         "201":
           description: Deal created successfully
@@ -381,18 +575,60 @@ paths:
                   requestId:
                     type: string
                   data:
-                    $ref: "#/components/schemas/DealResponse"
+                    $ref: "#/components/schemas/ExternalDeal"
+              example:
+                statuscode: 201
+                requestId: generated-1775657707462-of5riln7o
+                data:
+                  counterId: 7045
+                  dealName: Sunset Plaza Apartments
+                  address: 123 Main Street
+                  city: Austin
+                  state: TX
+                  zip: "78701"
+                  unitCount: 128
+                  createdOn: "2026-04-08T14:15:08.540Z"
+                  lastModifiedOn: "2026-04-08T14:15:08.540Z"
         "400":
-          description: Validation error
+          description: Validation error — invalid or missing `dealName`, or field constraints violated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 400
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Validation failed
+                  details:
+                    - path: dealName
+                      message: dealName is required
         "401":
           description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: API key does not have an assigned user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 403
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: >-
+                    This API key does not have an assigned user. Please ask your admin to assign a user to this key before creating or modifying deals.
         "429":
           description: Rate limit exceeded
+        "500":
+          description: Internal server error
     get:
       summary: List deals
-      description: List all deals for your account with pagination and optional search.
+      description: >-
+        List all deals for your account with pagination and optional search by deal name. Results are ordered by creation date (newest first).
       operationId: listDeals
       tags:
         - Deals
@@ -404,19 +640,21 @@ paths:
           schema:
             type: integer
             default: 1
-          description: Page number (1-based)
+            minimum: 1
+          description: Page number (1-based). Values below 1 are clamped to 1.
         - name: limit
           in: query
           schema:
             type: integer
             default: 20
+            minimum: 1
             maximum: 100
-          description: Number of deals per page (max 100)
+          description: Number of deals per page. Clamped between 1 and 100.
         - name: search
           in: query
           schema:
             type: string
-          description: Search by deal name
+          description: Filter deals by name (case-insensitive substring match on `dealName`)
       responses:
         "200":
           description: Deals retrieved successfully
@@ -436,21 +674,48 @@ paths:
                       deals:
                         type: array
                         items:
-                          $ref: "#/components/schemas/DealResponse"
+                          $ref: "#/components/schemas/ExternalDeal"
                       total:
                         type: integer
+                        description: Total number of matching deals across all pages
                       page:
                         type: integer
+                        description: Current page number
                       limit:
                         type: integer
+                        description: Number of deals per page
+              example:
+                statuscode: 200
+                requestId: generated-1775657732068-wthbkj0b3
+                data:
+                  deals:
+                    - counterId: 7121
+                      dealName: Cursor API Test Deal
+                      address: 456 Test Boulevard
+                      city: Denver
+                      state: CO
+                      zip: "80201"
+                      unitCount: 75
+                      createdOn: "2026-04-08T14:15:08.540Z"
+                      lastModifiedOn: "2026-04-08T14:15:08.540Z"
+                  total: 7068
+                  page: 1
+                  limit: 5
         "401":
           description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "429":
           description: Rate limit exceeded
+        "500":
+          description: Internal server error
   /api/external/v1/deals/{counterId}:
     get:
       summary: Get a deal
-      description: Retrieve a specific deal by its counter ID.
+      description: >-
+        Retrieve a specific deal by its counter ID. Only returns deals belonging to the authenticated account that are not soft-deleted.
       operationId: getDeal
       tags:
         - Deals
@@ -462,7 +727,7 @@ paths:
           required: true
           schema:
             type: integer
-          description: The deal's counter ID
+          description: The deal's sequential counter ID within the account
       responses:
         "200":
           description: Deal retrieved successfully
@@ -477,17 +742,45 @@ paths:
                   requestId:
                     type: string
                   data:
-                    $ref: "#/components/schemas/DealResponse"
+                    $ref: "#/components/schemas/ExternalDeal"
+        "400":
+          description: Invalid counterId (not a number)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 400
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Invalid counterId
         "401":
           description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 404
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Deal with counterId 99999 not found
         "429":
           description: Rate limit exceeded
+        "500":
+          description: Internal server error
     put:
       summary: Update a deal
-      description: Update an existing deal. Only the fields provided will be updated.
-        Requires an API key with an assigned user.
+      description: |-
+        Update an existing deal. Only the fields provided in the request body will be updated; omitted fields remain unchanged.
+
+        **Requires:** API key with an assigned user.
       operationId: updateDeal
       tags:
         - Deals
@@ -505,26 +798,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                dealName:
-                  type: string
-                  description: Name of the deal
-                address:
-                  type: string
-                  description: Property address
-                city:
-                  type: string
-                  description: Property city
-                state:
-                  type: string
-                  description: Property state
-                zip:
-                  type: string
-                  description: Property zip code
-                unitCount:
-                  type: integer
-                  description: Number of units in the property
+              $ref: "#/components/schemas/UpdateDealRequest"
       responses:
         "200":
           description: Deal updated successfully
@@ -539,21 +813,65 @@ paths:
                   requestId:
                     type: string
                   data:
-                    $ref: "#/components/schemas/DealResponse"
+                    $ref: "#/components/schemas/ExternalDeal"
+              example:
+                statuscode: 200
+                requestId: generated-1775658586624-9sjzc86sd
+                data:
+                  counterId: 7121
+                  dealName: Cursor API Test Deal (Updated)
+                  address: 789 Updated Avenue
+                  city: Seattle
+                  state: WA
+                  zip: "98101"
+                  unitCount: 120
+                  createdOn: "2026-04-08T14:15:08.540Z"
+                  lastModifiedOn: "2026-04-08T14:29:48.283Z"
         "400":
-          description: Validation error
+          description: Validation error or invalid counterId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: API key does not have an assigned user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 403
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: >-
+                    This API key does not have an assigned user. Please ask your admin to assign a user to this key before creating or modifying deals.
         "404":
           description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 404
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Deal with counterId 99999 not found
         "429":
           description: Rate limit exceeded
+        "500":
+          description: Internal server error
     delete:
-      summary: Delete a deal
-      description: Soft-delete a deal. The deal will no longer appear in listings.
-        Requires an API key with an assigned user.
+      summary: Delete a deal (soft-delete)
+      description: |-
+        Soft-delete a deal by its counter ID. The deal will no longer appear in listings but remains in the database with `IsDel = true`.
+
+        **Requires:** API key with an assigned user.
       operationId: deleteDeal
       tags:
         - Deals
@@ -584,207 +902,53 @@ paths:
                     properties:
                       message:
                         type: string
-                        example: Deal 42 deleted successfully
+                        example: Deal 3045 deleted successfully
+              example:
+                statuscode: 200
+                requestId: generated-1775657808958-stqxycut7
+                data:
+                  message: Deal 3045 deleted successfully
+        "400":
+          description: Invalid counterId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 400
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Invalid counterId
         "401":
           description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: API key does not have an assigned user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 403
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: >-
+                    This API key does not have an assigned user. Please ask your admin to assign a user to this key before creating or modifying deals.
         "404":
           description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                statuscode: 404
+                requestId: generated-1775657683598-hdj8qngt
+                error:
+                  message: Deal with counterId 99999 not found
         "429":
           description: Rate limit exceeded
-  /api/admin/api-keys:
-    get:
-      summary: List API keys for account
-      description: Retrieve all API keys for the authenticated user's account
-      operationId: listApiKeys
-      tags:
-        - API Key Management
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: API keys retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  statuscode:
-                    type: integer
-                    example: 200
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          format: uuid
-                        name:
-                          type: string
-                        keyPreview:
-                          type: string
-                          description: First 8 chars of key
-                        status:
-                          type: string
-                          enum:
-                            - active
-                            - revoked
-                        createdAt:
-                          type: string
-                          format: date-time
-                        lastUsedAt:
-                          type: string
-                          format: date-time
-                          nullable: true
-        "401":
-          description: Unauthorized
-    post:
-      summary: Create new API key
-      description: Generate a new API key for the account. The full key is only
-        returned once.
-      operationId: createApiKey
-      tags:
-        - API Key Management
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-              properties:
-                name:
-                  type: string
-                  maxLength: 100
-                  description: Descriptive name for the API key
-      responses:
-        "201":
-          description: API key created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  statuscode:
-                    type: integer
-                    example: 201
-                  data:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        format: uuid
-                      name:
-                        type: string
-                      key:
-                        type: string
-                        description: Full API key - store securely, shown only once
-                      createdAt:
-                        type: string
-                        format: date-time
-        "401":
-          description: Unauthorized
-  /api/admin/api-keys/{id}:
-    get:
-      summary: Get API key details
-      operationId: getApiKey
-      tags:
-        - API Key Management
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: API key details
-        "404":
-          description: API key not found
-    delete:
-      summary: Delete API key
-      description: Permanently delete an API key. This action cannot be undone.
-      operationId: deleteApiKey
-      tags:
-        - API Key Management
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: API key deleted
-        "404":
-          description: API key not found
-  /api/admin/api-keys/{id}/revoke:
-    patch:
-      summary: Revoke API key
-      description: Revoke an API key. Revoked keys cannot be used but remain in the system.
-      operationId: revokeApiKey
-      tags:
-        - API Key Management
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: API key revoked
-        "404":
-          description: API key not found
-  /api/admin/api-keys/{id}/regenerate:
-    post:
-      summary: Regenerate API key
-      description: Generate a new key value. The old key becomes invalid immediately.
-      operationId: regenerateApiKey
-      tags:
-        - API Key Management
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: API key regenerated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  statuscode:
-                    type: integer
-                    example: 200
-                  data:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        format: uuid
-                      key:
-                        type: string
-                        description: New API key - store securely
-        "404":
-          description: API key not found
+        "500":
+          description: Internal server error
