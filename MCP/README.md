@@ -2,7 +2,9 @@
 
 This folder contains Model Context Protocol (MCP) servers for interacting with the Radix Rent Roll Processing API from AI assistants and automation tools.
 
-These MCP servers allow tools like Claude Desktop, agent frameworks, and custom automation workflows to upload rent rolls, monitor processing, and retrieve structured outputs.
+These MCP servers allow tools like Claude Desktop, agent frameworks, and custom automation workflows to upload rent rolls, manage deals, monitor processing, and retrieve structured outputs.
+
+Both MCP servers now expose the API's `Deals` CRUD endpoints plus upload support for optional `dealId`, so models can create or look up a deal and attach a batch to it. One upload request can carry only one `dealId`, which means every file in that batch maps to the same deal.
 
 ---
 

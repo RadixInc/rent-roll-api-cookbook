@@ -31,6 +31,12 @@ chmod +x send-to-radix.sh
 ./send-to-radix.sh rent-roll.xlsx another-file.xlsx
 ```
 
+## Deal-Linked Uploads
+
+The API now supports an optional upload `dealId` field for attaching a processed batch to a deal in redIQ. If you extend this Quick Action to include deal selection, pass the deal `counterId` returned by the `Deals` endpoints.
+
+Only one `dealId` is allowed per upload request, so selecting multiple files in Finder sends one batch that can map to only one deal. Mixed-property selections should be uploaded separately by deal.
+
 ## Requirements
 
 - macOS 10.14+ (Mojave or later for Quick Actions)

@@ -1,72 +1,55 @@
 # Web UI Example
 
-A standalone single-page upload interface for the Radix Rent Roll API. Open `index.html` in any modern browser — no build step, no server, no dependencies.
+A standalone single-page API demo for the RedIQ external API. Open `index.html` in a browser and use one API key for both deal management and rent roll uploads.
 
 ## Features
 
+- Create, search, inspect, update, and delete deals
 - Drag-and-drop file selection
-- API key input with show/hide toggle
-- Email and webhook notification options
-- Real-time processing status with auto-refresh every 30 seconds
-- Progress bar and per-file status tracking
-- Responsive design (works on mobile)
+- Upload with email, webhook, or both
+- Optional upload-to-deal attachment using a selected deal
+- Real-time batch status polling using the API batch status values
+- Batch download and failed-file display
+- Responsive layout for desktop and mobile
 
 ## Quick Start
 
-1. Open `index.html` in your browser (double-click the file or use a local server).
-2. Drag rent roll files onto the drop zone (or click to browse).
-3. Enter your API key.
-4. Select a notification method (email and/or webhook).
-5. Click **Submit for Processing**.
-
-The page will show a live status tracker that polls the API every 30 seconds until processing is complete.
+1. Open `index.html` in your browser, or serve the folder locally.
+2. Enter your API key.
+3. Create a deal or load an existing one in the Deals section.
+4. Optionally click **Use For Upload** to attach the selected deal to the next upload batch.
+5. Add one or more files, configure notifications, and submit the batch.
+6. Review the status, batch downloads, and any failed files in the success view.
 
 ## Configuration
 
-By default the UI sends requests to the production API:
-
-```
-https://connect.rediq.io
-```
-
-To target a different environment, edit the `API_BASE_URL` variable at the top of `app.js`:
+The page targets production by default:
 
 ```js
-var API_BASE_URL = 'https://connect.rediq.io'; // change this
+var API_BASE_URL = 'https://connect.rediq.io';
 ```
+
+Edit that constant in `app.js` to point at another environment if needed.
+
+## Manual Test Checklist
+
+- Create a deal and confirm it appears in the picker.
+- Search for a deal by name.
+- Load deal details, update fields, and save them.
+- Delete a deal.
+- Upload with email only.
+- Upload with webhook only.
+- Upload with email + webhook + attached deal.
+- Confirm the success view shows the attached deal.
+- Confirm batch status handles `queued`, `in progress`, `complete`, `failed`, and `partially complete`.
+- Confirm batch downloads and failed files render when present.
 
 ## CORS Note
 
-Because the page makes cross-origin requests to `connect.rediq.io`, you may need to serve the files from a local HTTP server instead of opening them directly from disk. Any static file server will work:
+If direct file access causes CORS issues, serve the folder locally:
 
 ```bash
-# Python
 python -m http.server 8080
-
-# Node.js (npx, no install)
-npx serve .
-
-# Then open http://localhost:8080
 ```
 
-## File Structure
-
-```
-web-ui/
-  index.html   - Page markup
-  styles.css   - Styling (Inter font, responsive layout)
-  app.js       - Application logic (upload, poll, status display)
-```
-
-## Customisation
-
-| What                  | Where                             |
-| --------------------- | --------------------------------- |
-| API base URL          | `app.js` → `API_BASE_URL`        |
-| Max files per upload  | `app.js` → `MAX_FILES`           |
-| Max file size         | `app.js` → `MAX_FILE_SIZE`       |
-| Allowed extensions    | `app.js` → `ALLOWED_EXTENSIONS`  |
-| Poll interval         | `app.js` → `STATUS_POLL_INTERVAL`|
-| Colours / branding    | `styles.css` → CSS custom properties in `:root` |
-
-
+Then open `http://localhost:8080`.

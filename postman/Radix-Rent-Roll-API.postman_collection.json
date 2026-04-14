@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Radix Rent Roll API",
-    "description": "Upload rent roll files for AI-powered standardization and track processing status.\n\nSet the `api_key` variable in your Postman environment before sending requests.",
+    "description": "Upload rent roll files for AI-powered standardization, manage deals, and track processing status.\n\nSet the `api_key` variable before sending requests. If you want an upload batch attached to a redIQ deal, create or look up the deal first and then send its `counterId` as `dealId` on the upload request. Only one `dealId` is allowed per upload request, so every file in that batch is attached to the same deal.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -27,6 +27,11 @@
     },
     {
       "key": "batch_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "deal_counter_id",
       "value": "",
       "type": "string"
     }
@@ -77,6 +82,13 @@
               "value": "[{\"type\":\"email\",\"entry\":\"your-email@example.com\"}]",
               "type": "text",
               "description": "JSON array of notification methods. Supports email and webhook (HTTPS only)."
+            },
+            {
+              "key": "dealId",
+              "value": "42",
+              "type": "text",
+              "disabled": true,
+              "description": "Optional. Existing deal counterId to associate to this upload batch. Enable this field only when you want every file in the batch linked to the same deal."
             }
           ]
         },
@@ -85,7 +97,7 @@
           "host": ["{{base_url}}"],
           "path": ["api", "external", "v1", "upload"]
         },
-        "description": "Upload one or more rent roll files for AI-powered standardization.\n\nThe response includes a `batchId` that is automatically saved to the collection variables for use in the status request.\n\n**Supported file types:** .xlsx, .xls, .xlsm, .csv, .ods\n**Max file size:** 2 MB per file\n**Max files:** 20 per request"
+        "description": "Upload one or more rent roll files for AI-powered standardization.\n\nThe response includes a `batchId` that is automatically saved to the collection variables for use in the status request.\n\nIf you want the extracted rent roll data attached to a redIQ deal, enable the optional `dealId` form field and set it to a deal `counterId` from the Deals endpoints.\n\nOnly one `dealId` is allowed per upload request, so all files in the batch will be attached to the same deal. For folder automations containing multiple deals, send separate upload requests per deal.\n\n**Supported file types:** .xlsx, .xls, .xlsm, .csv, .ods\n**Max file size:** 2 MB per file\n**Max files:** 20 per request"
       },
       "response": [
         {
@@ -179,6 +191,140 @@
           "body": "{\n  \"statuscode\": 200,\n  \"requestId\": \"c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8\",\n  \"data\": {\n    \"batchId\": \"6af30011-af82-4425-a1ad-406db4b0995c\",\n    \"status\": \"complete\",\n    \"fileCount\": 1,\n    \"filesCompleted\": 1,\n    \"filesInProgress\": 0,\n    \"filesFailed\": 0,\n    \"percentComplete\": 100,\n    \"estimatedTotalUnits\": 35,\n    \"actualTotalUnits\": 32,\n    \"errorMessage\": null,\n    \"createdAt\": \"2026-02-09T19:32:43.643Z\",\n    \"updatedAt\": \"2026-02-09T19:37:00.000Z\",\n    \"files\": [\n      {\n        \"fileId\": \"05e9078d-2023-4e60-8a9f-ad9da5208301\",\n        \"fileName\": \"aurora-128.xlsx\",\n        \"status\": \"complete\",\n        \"downloadUrl\": \"https://external-api-rent-rolls.s3.amazonaws.com/...\",\n        \"errorMessage\": null,\n        \"createdAt\": \"2026-02-09T19:32:43.643Z\",\n        \"updatedAt\": \"2026-02-09T19:34:55.000Z\"\n      }\n    ],\n    \"batchDownloads\": [\n      {\n        \"type\": \"json\",\n        \"downloadUrl\": \"https://external-api-rent-rolls.s3.amazonaws.com/...\",\n        \"expiresAt\": \"2026-02-10T19:37:00.000Z\"\n      },\n      {\n        \"type\": \"excel\",\n        \"downloadUrl\": \"https://external-api-rent-rolls.s3.amazonaws.com/...\",\n        \"expiresAt\": \"2026-02-10T19:37:00.000Z\"\n      }\n    ]\n  }\n}"
         }
       ]
+    },
+    {
+      "name": "Create Deal",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    var jsonData = pm.response.json();",
+              "    if (jsonData.data && jsonData.data.counterId !== undefined && jsonData.data.counterId !== null) {",
+              "        pm.collectionVariables.set('deal_counter_id', String(jsonData.data.counterId));",
+              "        console.log('Saved deal_counter_id: ' + jsonData.data.counterId);",
+              "    }",
+              "}",
+              "",
+              "pm.test('Status code is 201', function () {",
+              "    pm.response.to.have.status(201);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"dealName\": \"Sunset Plaza Apartments\",\n  \"address\": \"123 Main St\",\n  \"city\": \"Austin\",\n  \"state\": \"TX\",\n  \"zip\": \"78701\",\n  \"unitCount\": 128\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/external/v1/deals",
+          "host": ["{{base_url}}"],
+          "path": ["api", "external", "v1", "deals"]
+        },
+        "description": "Create a deal in redIQ. The response returns a `counterId`, which this collection automatically stores as `deal_counter_id` for later use as upload `dealId`."
+      },
+      "response": []
+    },
+    {
+      "name": "List Deals",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/external/v1/deals?page=1&limit=20",
+          "host": ["{{base_url}}"],
+          "path": ["api", "external", "v1", "deals"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "search",
+              "value": "",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "List deals for the authenticated account. Use this request to find the `counterId` you want to pass as upload `dealId`."
+      },
+      "response": []
+    },
+    {
+      "name": "Get Deal",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/external/v1/deals/{{deal_counter_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "external", "v1", "deals", "{{deal_counter_id}}"]
+        },
+        "description": "Retrieve a single deal by `counterId`. The `deal_counter_id` variable is populated automatically after a successful Create Deal request."
+      },
+      "response": []
+    },
+    {
+      "name": "Update Deal",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"dealName\": \"Sunset Plaza Apartments - Phase II\",\n  \"unitCount\": 132\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/external/v1/deals/{{deal_counter_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "external", "v1", "deals", "{{deal_counter_id}}"]
+        },
+        "description": "Update one or more fields on an existing deal."
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Deal",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/external/v1/deals/{{deal_counter_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "external", "v1", "deals", "{{deal_counter_id}}"]
+        },
+        "description": "Soft-delete a deal. Deleted deals no longer appear in listings."
+      },
+      "response": []
     }
   ]
 }

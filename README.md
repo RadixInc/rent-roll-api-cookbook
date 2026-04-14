@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-6BA539)](openapi/rent-roll-api.yaml)
 
-Integration recipes and code examples for the **Radix Underwriting Rent Roll API** -- upload raw rent roll files (Excel, CSV) and receive standardized, structured data back.
+Integration recipes and code examples for the **Radix Underwriting Rent Roll API** -- upload raw rent roll files (Excel, CSV), manage deals, and receive standardized, structured data back.
 
 ---
 
@@ -17,6 +17,21 @@ curl -X POST https://connect.rediq.io/api/external/v1/upload \
   -H "Authorization: Bearer $RADIX_API_KEY" \
   -F "files=@rent-roll.xlsx" \
   -F 'notificationMethod=[{"type":"email","entry":"you@company.com"}]'
+```
+
+If you want the extracted data attached to a deal in redIQ, create the deal first and then include its `counterId` as `dealId` on the upload request:
+
+```bash
+curl -X POST https://connect.rediq.io/api/external/v1/deals \
+  -H "Authorization: Bearer $RADIX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"dealName":"Sunset Plaza Apartments","city":"Austin","state":"TX"}'
+
+curl -X POST https://connect.rediq.io/api/external/v1/upload \
+  -H "Authorization: Bearer $RADIX_API_KEY" \
+  -F "files=@rent-roll.xlsx" \
+  -F 'notificationMethod=[{"type":"email","entry":"you@company.com"}]' \
+  -F "dealId=42"
 ```
 
 You will receive an email when processing completes. Or poll for status:
@@ -59,23 +74,50 @@ API keys are available in the redIQ platform under **External API** settings. Ke
 
 Set it as an environment variable to use with the examples in this repo:
 
+macOS/Linux (bash/zsh):
+
 ```bash
-export RADIX_API_KEY="riq_live_your_api_key_here"
+export RADIX_API_KEY="riq_live_your_api_key_here"  
+```
+
+PowerShell (Windows):
+
+```powershell
+$env:RADIX_API_KEY = "riq_live_your_api_key_here"
+```
+
+Command Prompt (Windows):
+
+```cmd
+set RADIX_API_KEY=riq_live_your_api_key_here
 ```
 
 ---
 
 ## How It Works
 
-1. **Upload** one or more rent roll files (`.xlsx`, `.xls`, `.xlsm`, `.csv`, `.ods`) to the `/upload` endpoint.
-2. Files are **queued** for asynchronous processing.
-3. **Poll** the `/job/{batchId}/status` endpoint, or wait for an **email/webhook notification**.
-4. **Download** the standardized output from the pre-signed URLs in the response.
+1. Optionally **create or look up a deal** with the `/deals` endpoints if you want processed files linked to a redIQ deal.
+2. **Upload** one or more rent roll files (`.xlsx`, `.xls`, `.xlsm`, `.csv`, `.ods`) to the `/upload` endpoint.
+3. Optionally include **`dealId`** on the upload request to attach the entire batch to that deal.
+4. Files are **queued** for asynchronous processing.
+5. **Poll** the `/job/{batchId}/status` endpoint, or wait for an **email/webhook notification**.
+6. **Download** the standardized output from the pre-signed URLs in the response.
 
 ```
+POST /api/external/v1/deals           -->  201 Created   { counterId, dealName, ... }
+GET  /api/external/v1/deals           -->  200 OK        { deals[], total, page, limit }
+GET  /api/external/v1/deals/{id}      -->  200 OK        { counterId, dealName, ... }
+PUT  /api/external/v1/deals/{id}      -->  200 OK        { counterId, dealName, ... }
+DELETE /api/external/v1/deals/{id}    -->  200 OK        { message }
 POST /api/external/v1/upload          -->  202 Accepted  { batchId, trackingUrl }
 GET  /api/external/v1/job/{id}/status -->  200 OK        { status, files[], batchDownloads[] }
 ```
+
+## Deals And Batch Design
+
+`dealId` on the upload endpoint is optional, but when you provide it the value applies to the entire upload request. The API accepts only one `dealId` per upload, so every file in that batch is attached to the same deal in redIQ.
+
+That matters for folder automations: if a folder contains rent rolls for multiple deals, split the files into separate upload requests by destination deal instead of sending the whole folder in one batch.
 
 ---
 

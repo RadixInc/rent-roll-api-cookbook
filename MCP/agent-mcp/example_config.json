@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "radix-rent-roll-mcp": {
+    "radix-rent-roll-agent": {
       "command": "python",
-      "args": ["C:\\Users\\YourName\\path\\to\\radix-rent-roll-mcp\\server.py"],
+      "args": ["C:\\Users\\YourName\\path\\to\\rent-roll-api-cookbook-1\\MCP\\agent-mcp\\server.py"],
       "env": {
         "RADIX_API_KEY": "your-api-key-here",
         "RADIX_API_URL": "https://connect.rediq.io",

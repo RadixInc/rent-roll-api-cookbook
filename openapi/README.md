@@ -6,8 +6,19 @@ The file `rent-roll-api.yaml` is the OpenAPI 3.0 specification for the Radix Und
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/external/v1/upload` | Upload rent roll files for processing |
+| POST | `/api/external/v1/upload` | Upload rent roll files for processing, optionally attaching the whole batch to a deal with `dealId` |
 | GET | `/api/external/v1/job/{batchId}/status` | Check batch processing status |
+| POST | `/api/external/v1/deals` | Create a deal and receive its `counterId` for later uploads |
+| GET | `/api/external/v1/deals` | List deals for the authenticated account |
+| GET | `/api/external/v1/deals/{counterId}` | Retrieve one deal by counter ID |
+| PUT | `/api/external/v1/deals/{counterId}` | Update an existing deal |
+| DELETE | `/api/external/v1/deals/{counterId}` | Soft-delete a deal |
+
+## Upload-To-Deal Behavior
+
+The upload request now supports an optional `dealId` field. Pass the `counterId` returned by the `Deals` endpoints when you want the extracted rent roll data from that batch attached to a specific deal in redIQ.
+
+Only one `dealId` is accepted per upload request. If you are automating a folder full of rent rolls for multiple deals, group files by destination deal and send separate upload requests instead of a single mixed batch.
 
 ## How to Use
 

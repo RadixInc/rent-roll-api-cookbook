@@ -4,7 +4,8 @@
   "description": "Upload rent roll files to the Radix Underwriting API using Node.js",
   "type": "module",
   "scripts": {
-    "upload": "node upload.mjs"
+    "upload": "node upload.mjs",
+    "test": "node upload.test.mjs"
   },
   "engines": {
     "node": ">=18.0.0"

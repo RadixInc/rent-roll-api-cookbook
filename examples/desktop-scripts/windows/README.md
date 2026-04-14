@@ -17,6 +17,8 @@ Right-click any spreadsheet, select **Upload Rent Roll (redIQ)**, done.
 
 Multi-file select is supported - select several files, right-click, and they all upload in one batch (up to 20).
 
+The API now also supports an optional upload `dealId` field for attaching a processed batch to a deal in redIQ. If you extend this script for deal-aware workflows, remember that only one `dealId` is allowed per upload request, so every file selected in the same right-click action would be attached to the same deal.
+
 ---
 
 ## What Setup Does
